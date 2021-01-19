@@ -8,6 +8,8 @@ math: true
 title: Writing technical content in Academic
 ---
 
+Is this visible?
+
 Academic is designed to give technical content creators a seamless experience. You can focus on the content and Academic handles the rest.
 
 **Highlight your code snippets, take notes on math classes, and draw diagrams from textual representation.**
