@@ -6,6 +6,7 @@ image:
   placement: 3
 math: true
 title: Writing technical content in Academic
+active: false
 ---
 
 Is this visible?
