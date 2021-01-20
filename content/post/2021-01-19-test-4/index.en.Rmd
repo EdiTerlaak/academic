@@ -1,5 +1,5 @@
 ---
-title: Do the Rich influence Policy more than the Poor? (Part 2)
+title: Do the Rich influence Policy More than the Poor? (part 2)
 author: ''
 date: '2021-01-19'
 slug: 
@@ -63,28 +63,27 @@ invlogit <- function(x){
 
 ## Analysis 
 
-In this second part on Schakel data, we turn to analysis. We replicate the findings with Bayesian tools and interpret them accordingly.
+In this second part on Schakel's data, we turn to analysis. We replicate his findings with Bayesian tools, which is more work, but gives results that are both more useful and easier to interpret. 
 
 ### The logistic function
 
-We will now check whether the levels of support of opinionated rich folks predict the policy pass rate better than the levels of support of the opinionated poor. The variable that we thus predict is `pass`, which takes on the values 0 or 1. We assume there is a parameter p, which is the probability of getting a 1 for `pass`. We also assume that the value of p shifts with the level of support for a policy. In order to stay within the range [0,1] of a probability, we slap a logit function on p. 
+We will first check whether the levels of support of opinionated rich folks predict the policy pass rate better than the levels of support of the opinionated poor. The variable that we thus predict is `pass`, which takes on the values 0 or 1. We assume that the data were generated in a process with the parameter p, which is the probability of getting a 1 for `pass`. We also assume that the value of p shifts with the level of support for a policy. In order to stay within the range [0,1] of a probability, we slap a logit function on p. 
 
 $$logit(p)=log(\frac{p}{1-p})$$
-This function takes in probabilities and can spit out numbers over the entire real number line. Let us call this output x. That is exactly the wrong way around for us, as we want a model where the outcome is a probability (such as the probability of `pass`). What we need them is the inverse of the logit function. Writing p in terms of x gives us exactly that.
+This function takes in probabilities and can spit out numbers over the entire real number line. Let us call this output x. That is exactly the wrong way around for us, as we want a model where the outcome is a probability (here: the probability of `pass`). What we need then is the inverse of the logit function. Writing p in terms of x gives us exactly that.
 
 $$logit^{-1}(x)=\frac{e^x}{1+e^x}$$
-This so called 'logistic' function takes in real numbers and spits out values between 0 and 1 (not 0 and 1 itself, but we get close enough :). In our case, we model the probability that `pass` is 1 given the level of support x. However, p is unlikely to grow at the same pace as x, and so we add a slope a and an intercept b to x that we will estimate.
+This so called 'logistic' function takes in real numbers and spits out values between 0 and 1. In our case, we model the probability that `pass` is 1, given the level of support x. In order to estimate the change in p, we add a slope a and an intercept b to x.
 
 $$P(y_{i}=1)=\frac{e^{ax_{i}+b}}{1+e^{ax_{i}+b}}$$
 
-
 ### Prior predictive checking
 
-In a Bayesian analysis, before we estimate parameters, we constrain the model by using expert information in the form of a prior distribution. In this case, we must set priors for a and b. This is hard, because intuition does not tell us what happens to $P(y_{i}=1)$ when we adjust a and b and shove it into the logistic function. We therefore simulate the graph of the model for several values of a and b. 
+In a Bayesian analysis, before we estimate parameters, we constrain the model by using information about the process we are modeling in the form of a prior distribution. In this case, we must set priors for a and b. This is hard, because intuition does not tell us what happens to $P(y_{i}=1)$ when we adjust a and b and shove it into the logistic function. We therefore simulate the graph of the model for several values of a and b. 
 
 As the following graph shows, an innocent looking prior of N(0,10) commits us to unrealistic beliefs about the probability of a policy passing, given the support of the 10th income percentile. 
 
-```{r prior-checking}
+```{r prior-checking, warning=FALSE}
 # we will simulate 100 curves
 n <- 100
 
@@ -110,7 +109,7 @@ p1
 ```
 This prior implies that we think that if support is bigger than 10%, a policy is either 100% certain to be adopted or has 0% of being adopted. That is not realistic. We have therefore not constrained our model sufficiently. And so we continue to turn the knobs of our priors.
 
-```{r prior-adjustment}
+```{r prior-adjustment, warning=FALSE}
 n <- 100
 
 sim_i10_1 <-
@@ -132,11 +131,13 @@ p2 <-
 p2
 
 ```
-These more constrained values for the mean and standard deviation of a and b better align with what we can reasonable expect before seeing the data. We are uncommitted with regard to the probability of a law passing with 0% support as well with regard to the steepness of the curve. These priors are sufficiently agnostic that we are unsure if increased support will even increase the probability of a policy being adopted. By setting these priors, we have simply limited our results to the realm of the practically possible. 
+These more constrained values for the mean and standard deviation of a and b better align with what we can reasonable expect before seeing the data. We are uncommitted with regard to the probability of a law passing with 0% support as well with regard to the steepness of the curve. These priors are so conservative that we are even agnostic as to whether increased support will increase the probability of a policy being adopted. By setting these priors, we have simply limited our results to the realm of the practically possible. 
 
 ### Running the model
 
-We now put these priors into the model for predicting `pass`, based on support by either `i10` or `i90`. Throwing both income groups into one regression model would be uninformative, because the opinions of the two groups are so highly correlated that we would be unable to tell which group accounts for which percentage of explained variance. We build two models then, for which we use the `brms` package. 
+We now put these priors into the model for predicting `pass`, based on support by either `i10` or `i90`. Out will come a posterior distribution, which reflects our beliefs about the intercepts a and b after seeing the data.
+
+Throwing both income groups into one regression model would be uninformative, because the opinions of the two groups are so highly correlated that we would be unable to tell which group accounts for which percentage of explained variance. We build two models then, for which we use the `brms` package. 
 
 ```{r i10-i90-models}
 
@@ -166,7 +167,7 @@ plot(fit_i90_pr)
 
 ```
 
-On the right, we see that the chains converged nicely. On the left, we can observe the power of Bayesian analysis. We see posterior distributions for the parameters that we estimated - the intercept and the slope. The marginal posterior distribution gives us the probability distribution of a parameter after we have learned from the data. In this sense, it is an update of our prior beliefs. This means that we do not have to give muddy formulations that we see in frequentist analysis. On the y-axis of the plots on the left, probability density is displayed. This means that probabilities are assigned to values of the parameter, such as the slope. Hence, we can do more than say whether a value is different from 0 (as in frequentist hypothesis testing). This is, after all, typically not very interesting. Instead, we want to know how big a parameter is with what probability. Bayesian analysis then answers questions that we care about.
+On the right, we see that the chains that estimate the posterior converged nicely. On the left, we can observe the power of Bayesian analysis. We see posterior distributions for the parameters that we estimated - the intercept and the slope. The marginal posterior distribution gives us the probability distribution of a parameter after we have learned from the data. In this sense, it is an update of our prior beliefs. This means that we do not have to give muddy formulations that we see in frequentist analysis. On the y-axis of the plots on the left, probability density is displayed. This means that probabilities are assigned to values of the parameter, such as the slope. Hence, we can do more than say whether a value is different from 0 (as in frequentist hypothesis testing). This is, after all, typically not very interesting. Instead, we want to know how big a parameter is with what probability. Bayesian analysis can do precisely that.
 
 When we sample 100 intercepts and slopes from the posteriors and plug them into the logistic function we see what our model looks like. 
 
@@ -203,7 +204,7 @@ One could also calculate the so called 'odds ratio'. The odds are defined as $\f
 
 
 $$P(y_{i}=0)=1-\frac{e^{ax_{i}+b}}{1+e^{ax_{i}+b}}$$
-some straightforward algebra tells us that
+some algebra tells us that this is equal to
 
 $$log(\frac{P(y_{i}=1)}{P(y_{i}=0)})=a+bx_{i}$$
 
@@ -233,7 +234,7 @@ Schakel %>%
 
 ```
 
-It is useful however to bin values of the numeric variable. We can then take the average of the values within a bin, which will typically take us to a place between 0 and 1. These averages are displayed as red dots below. 
+It can be useful however to bin values of the numeric variable. We can then take the average of the values within a bin, which will typically take us to a place between 0 and 1. These averages are displayed as red dots below. 
 
 ```{r binned-logistic-graph}
 
