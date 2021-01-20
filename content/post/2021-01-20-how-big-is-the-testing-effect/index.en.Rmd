@@ -18,9 +18,10 @@ projects: []
 ---
 
 
-Students and teachers agree on one thing: their dislike of tests. Students get stressed out and teachers dislike grading. According to a growing movement among researchers of education, this image is unfortunate, because they think that taking a test after learning improves the score on a subsequent test. This is called the testing effect but is also known as the retrieval effect. They therefore aim to disassociate testing from evaluation and aim to rebrand it as a learning tool. 
+Students and teachers are united in their dislike of tests. Students get stressed out by cramming and teachers by grading. According to a growing movement among researchers of education, this sentiment is unfortunate, because they think that taking a test after learning improves the score on a subsequent test. This effect is called the testing effect or the retrieval effect. They therefore aim to disassociate testing from evaluation, and aim to rebrand it as a learning tool. 
 
-However, many movements in education reform are well-meaning, but flawed. They are often driven by ideology and supported by pseudo-science, arm-chair speculation or an extremely biased interpretation of the evidence. Movements that come to mind are those that promote the idea that there are learning styles or the idea that all children benefit from discovery-based learning. 
+However, many movements in education reform are well-meaning, but flawed. They are often driven by ideology and supported by pseudo-science, arm-chair speculation or an extremely biased interpretation of the evidence. Movements that come to mind are those that promote the idea that there are learning styles or the idea that all children benefit from discovery-based learning.
+
 So how strong is the evidence for the so called testing effect? In this article we will look at a recent study in Nature that answers this question. We reanalyze the data from a Bayesian point of view. In the process, we not only get an idea about the strength of the evidence for the testing effect, but learn a principled way of how to assess the strength of evidence in general.
 
 ```{r setup, include=FALSE}
@@ -295,7 +296,6 @@ fit_ind_1 <-
 print(fit_ind_1, digits=3)
 ```
 We see that this prior more aggressively tunes down the estimate of the effect size, as well as the estimate of the standard error. 
-
 
 
 ```{r}
