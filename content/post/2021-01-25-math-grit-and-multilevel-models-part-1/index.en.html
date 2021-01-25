@@ -1,0 +1,226 @@
+---
+title: Math, Grit and Multilevel Models (part 1)
+author: Edi Terlaak
+date: '2021-01-25'
+slug: math-grit-and-multilevel-models-part-1
+categories: []
+tags: []
+subtitle: ''
+summary: ''
+authors: []
+lastmod: '2021-01-25T17:20:46+01:00'
+featured: no
+image:
+  caption: ''
+  focal_point: ''
+  preview_only: no
+projects: []
+---
+
+
+
+<p>Teachers tell their students that perseverance pays off in the end. However, twin studies have shown that a large chunk of learning outcomes are explained by genetics. So does sticking to it really improve grades? And if so, by how much, compared to for example IQ? And even if there were an effect of grit on grades, can it be instilled in students in school, or is it ingrained because of genetics or child rearing?</p>
+<p>A recent study carried out in Turkey claims to show that grit does indeed matter. The study was designed in such a way that grit could shine. Effects on grades are in general bigger for younger children, while grit interventions benefit kids from lower social economic backgrounds more. The study was therefore carried out with 10 year olds from poorer families. We use data from the second wave of the study, because it allows us to make causal inferences.</p>
+<p>We load r packages together with the data, mutate categorical variables, and have a quick look.</p>
+<pre class="r"><code>library(haven)
+library(tidyverse)
+library(naniar)
+library(here)
+library(brms)
+library(mice)
+library(ggthemes)
+library(patchwork)
+library(tinytex)
+library(forcats) 
+
+# second sample 1499 students
+data2 &lt;- read_dta(here(&quot;content/post/2021-01-25-math-grit-and-multilevel-models-part-1/Sample2_Data.dta&quot;))
+  
+data2 &lt;- data2 %&gt;% mutate_at(vars(matches(&quot;choice&quot;)), as.factor) %&gt;% 
+                    mutate_at(vars(matches(&quot;success&quot;)), as.factor) %&gt;% 
+                    mutate_at(vars(matches(&quot;payoff&quot;)), as.factor) %&gt;%     
+                    mutate_at(vars(matches(&quot;difficult&quot;)), as.factor)
+
+cols &lt;- c(&quot;sample&quot;, &quot;schoolid&quot;, &quot;classid&quot;, &quot;grit&quot;, &quot;task_ability&quot;, &quot;playedr1&quot;, &quot;alldiff&quot;, &quot;playedv2&quot;, &quot;inconsistent&quot;, &quot;male&quot;, &quot;risk&quot;, &quot;wealth&quot;)
+
+data2 &lt;- data2 %&gt;% mutate_at(cols, funs(factor(.)))
+
+data2 &lt;- data2 %&gt;%  mutate(grit = fct_recode(grit,
+                    &quot;control&quot; = &quot;0&quot;,
+                    &quot;intervention&quot; = &quot;1&quot;))
+
+glimpse(data2)</code></pre>
+<pre><code>## Rows: 1,499
+## Columns: 52
+## $ sample              &lt;fct&gt; 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,...
+## $ schoolid            &lt;fct&gt; 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,...
+## $ classid             &lt;fct&gt; 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,...
+## $ studentid           &lt;dbl&gt; 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, ...
+## $ grit                &lt;fct&gt; intervention, intervention, intervention, inter...
+## $ csize               &lt;dbl&gt; 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39,...
+## $ mathscore1          &lt;dbl&gt; -1.5463763, -1.5463763, 1.0885546, -1.5463763, ...
+## $ verbalscore1        &lt;dbl&gt; -0.2813259, 0.3570126, 1.6336896, -0.9196644, 0...
+## $ mathscore2          &lt;dbl&gt; -0.56757200, -0.09212456, 1.33421779, -1.043019...
+## $ verbalscore2        &lt;dbl&gt; 0.3702991, -0.0632688, 0.8038670, -1.3639724, -...
+## $ mathscore3          &lt;dbl&gt; -0.6490632, NA, NA, -0.1616417, -0.6490632, -0....
+## $ verbalscore3        &lt;dbl&gt; -0.01901184, NA, NA, -1.36366713, -0.01901184, ...
+## $ mathgrade2          &lt;dbl&gt; -0.8918913, -1.4404734, 1.3024373, -2.5376377, ...
+## $ verbalgrade2        &lt;dbl&gt; -0.6461628675, -0.6461628675, 1.2911666632, -1....
+## $ task_ability        &lt;fct&gt; 2, 3, 6, NA, 5, 3, NA, 9, 3, 3, NA, 2, 5, 4, 4,...
+## $ choicer1            &lt;fct&gt; 1, 1, 1, NA, 1, 1, NA, 1, 0, 1, NA, 0, 1, 1, 1,...
+## $ choicer2            &lt;fct&gt; 1, 1, 1, NA, 1, 1, NA, 1, 1, 1, NA, 1, 1, 0, 1,...
+## $ choicer3            &lt;fct&gt; 1, 0, 0, NA, 0, 0, NA, 1, 0, 1, NA, 1, 1, 1, 1,...
+## $ choicer4            &lt;fct&gt; 0, 0, 1, NA, 0, 0, NA, 1, 0, 1, NA, 1, 1, 1, 1,...
+## $ choicer5            &lt;fct&gt; 0, 0, 1, NA, 0, 0, NA, 1, 0, 0, NA, 1, 1, 0, 1,...
+## $ playedr1            &lt;fct&gt; 1, 1, 1, NA, 1, 1, NA, 1, 1, 1, NA, 1, 1, 1, 1,...
+## $ alldiff             &lt;fct&gt; 0, 0, 0, NA, 0, 0, NA, 1, 0, 0, NA, 0, 1, 0, 1,...
+## $ choicev2            &lt;fct&gt; 1, 1, 1, NA, 1, 0, NA, 1, 0, 1, NA, 0, 1, 1, 1,...
+## $ playedv2            &lt;fct&gt; 1, 1, 1, 1, 1, 1, NA, 1, NA, 1, NA, 1, 1, 1, 1,...
+## $ successr1           &lt;fct&gt; 0, 0, 0, NA, 0, 0, NA, 1, 1, 1, NA, 0, 0, 0, 0,...
+## $ successr2           &lt;fct&gt; 0, 0, 1, NA, 0, 0, NA, 0, 0, 0, NA, 0, 0, 1, 0,...
+## $ successr3           &lt;fct&gt; 0, 1, 1, NA, 1, 1, NA, 1, 1, 1, NA, 0, 0, 0, 0,...
+## $ successr4           &lt;fct&gt; 1, 1, 1, NA, 1, 1, NA, 0, 1, 0, NA, 0, 0, 0, 0,...
+## $ successr5           &lt;fct&gt; 1, 1, 0, NA, 1, 1, NA, 1, 1, 1, NA, 0, 0, 1, 0,...
+## $ successv2           &lt;fct&gt; 0, 0, 1, 0, 1, 0, NA, 1, NA, 1, NA, 0, 1, 0, 0,...
+## $ payoffr1            &lt;fct&gt; 0, 0, 0, NA, 0, 0, NA, 4, 4, 4, NA, 0, 0, 0, 0,...
+## $ payoffr2            &lt;fct&gt; 0, 0, 4, NA, 0, 0, NA, 0, 0, 0, NA, 0, 0, 1, 0,...
+## $ payoffr3            &lt;fct&gt; 0, 1, 1, NA, 1, 1, NA, 4, 1, 4, NA, 0, 0, 0, 0,...
+## $ payoffr4            &lt;fct&gt; 1, 1, 4, NA, 1, 1, NA, 0, 1, 0, NA, 0, 0, 0, 0,...
+## $ payoffr5            &lt;fct&gt; 1, 1, 0, NA, 1, 1, NA, 4, 1, 1, NA, 0, 0, 1, 0,...
+## $ payoffv2            &lt;fct&gt; 0, 0, 4, 0, 4, 0, NA, 4, NA, 4, NA, 0, 4, 0, 0,...
+## $ bothpayoffs         &lt;fct&gt; 0.400000005960464, 0.600000023841858, 5.8000001...
+## $ avpayoffv1          &lt;fct&gt; 0.400000005960464, 0.600000023841858, 1.7999999...
+## $ difficult_imposedr1 &lt;fct&gt; 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,...
+## $ difficult_imposedv2 &lt;fct&gt; 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,...
+## $ inconsistent        &lt;fct&gt; 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,...
+## $ belief_survey1      &lt;dbl&gt; -0.8300257, -0.8300257, -0.8300257, 0.2235301, ...
+## $ grit_survey1        &lt;dbl&gt; -0.9890393, -0.1146530, 0.7597334, -1.8634257, ...
+## $ belief_survey2      &lt;dbl&gt; 0.39143115, 0.83131617, 1.45293784, -0.07900735...
+## $ grit_survey2        &lt;dbl&gt; 1.23553312, 0.54137754, 0.38077089, -1.32405376...
+## $ confidence_survey2  &lt;dbl&gt; -0.36769900, -1.60354412, -0.46631369, -1.15136...
+## $ male                &lt;fct&gt; 0, 0, 1, 1, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1, 0,...
+## $ age                 &lt;dbl&gt; NA, 9.833333, 9.416667, NA, 11.916667, 10.66666...
+## $ risk                &lt;fct&gt; NA, 4, 3, 3, 1, 1, 1, 1, 1, 2, 3, 3, 1, 1, 3, N...
+## $ success             &lt;fct&gt; 3, 3, 5, 2, 3, 3, 3, 4, 3, 4, 5, 3, 4, 4, 2, 3,...
+## $ wealth              &lt;fct&gt; 3, 2, 3, 3, 2, 2, 3, 4, 3, 3, 2, 3, 3, 2, 2, 3,...
+## $ raven               &lt;dbl&gt; 0.09375709, 0.83751386, 1.58127069, -2.13751340...</code></pre>
+<pre class="r"><code>is.ordered(data2$successr2)</code></pre>
+<pre><code>## [1] FALSE</code></pre>
+<div id="visual-exploration" class="section level3">
+<h3>Visual exploration</h3>
+<p>For the experiment 16 schools were randomly divided into a control and intervention group, where special training in grit was given to the students. Let’s see how schools, classes and students were divided over de two groups.</p>
+<pre class="r"><code>data2 %&gt;% group_by(grit) %&gt;% 
+  summarize(count_school = n_distinct(schoolid),
+            count_class = n_distinct(classid), 
+            count_students = n_distinct(studentid))</code></pre>
+<pre><code>## # A tibble: 2 x 4
+##   grit         count_school count_class count_students
+##   &lt;fct&gt;               &lt;int&gt;       &lt;int&gt;          &lt;int&gt;
+## 1 control                 8          24            816
+## 2 intervention            8          18            683</code></pre>
+<p>Whereas schools were divided evenly over the groups, classes and students were not. This confirms that the researchers exerted control over the allocations of schools, but not classes and students.</p>
+<p>Regardless, properties such as IQ and verbal scores are pretty evenly distributed among the two groups. This is not true for wealth though, a variable that measures the income group of the parents.</p>
+<pre class="r"><code>p1 &lt;- data2 %&gt;% ggplot(aes(x=raven)) +
+  geom_density() +
+  facet_wrap(~ grit, nrow=2) +
+  theme_tufte()
+
+p2 &lt;- data2 %&gt;% drop_na() %&gt;% 
+  ggplot(aes(x=wealth)) +
+  geom_bar(aes(x = wealth, y = ..prop.., group=1), stat = &quot;count&quot;) +
+  facet_wrap(~ grit, nrow=2)+
+  labs(y=&quot;proportion&quot;) +
+  theme_tufte()
+
+p3 &lt;- data2 %&gt;% group_by(grit) %&gt;% ggplot(aes(x=verbalscore1)) +
+  geom_bar(aes(x = verbalscore1, y = ..prop..), stat = &quot;count&quot;, width=0.7) +
+  facet_wrap(~ grit, nrow=2)+
+  labs(y=&quot;proportion&quot;) +
+  theme_tufte()
+
+p1 + p3 +p2 </code></pre>
+<p><img src="/post/2021-01-25-math-grit-and-multilevel-models-part-1/index.en_files/figure-html/two_groups-1.png" width="672" /></p>
+<p>In order to get a feel for the impact of the experiment, we split out the effect of grit on the differences in scores on a math test before and after the intervention.</p>
+<pre class="r"><code>data2 &lt;- data2 %&gt;% mutate(math_diff = mathscore2-mathscore1)
+
+ggplot(data = na.omit(data2[c(&quot;grit&quot;, &quot;wealth&quot;, &quot;math_diff&quot;)]), aes(factor(wealth), math_diff)) +
+  geom_boxplot() +
+  facet_wrap(~ factor(grit)) +
+  labs(y=&quot;difference in math scores&quot;,
+       x= &quot;wealth groups&quot;) +
+  geom_hline(yintercept = 0, color=&quot;red&quot;, size=1) +
+  theme_tufte()</code></pre>
+<p><img src="/post/2021-01-25-math-grit-and-multilevel-models-part-1/index.en_files/figure-html/plotting_scores_by_wealth-1.png" width="672" />
+There is some movement in the intervention group. Pupils from lower wealth classes seem to benefit from the grit intervention, whereas those from higher wealth classes may suffer.</p>
+<p>Let us also quickly check if the difference in math scores depends on the skill level of the student. To this end we draw a least squares line that fits the score on the second math test based on the first. We do this both for students in the control group and for those in the intervention group. The transparent grey band around the lines are 95% confidence intervals.</p>
+<pre class="r"><code>data2 %&gt;% ggplot(aes(x=mathscore1, y=mathscore2, color=grit)) +
+  geom_jitter() +
+  geom_smooth(method=&quot;lm&quot;) +
+  scale_color_manual(values=c(&quot;#999999&quot;, &quot;#E69F00&quot;)) +
+  theme_tufte()</code></pre>
+<pre><code>## `geom_smooth()` using formula &#39;y ~ x&#39;</code></pre>
+<p><img src="/post/2021-01-25-math-grit-and-multilevel-models-part-1/index.en_files/figure-html/plotting_diffmath_by_grit-1.png" width="672" />
+The graph can be interpreted as follows. Suppose we were given a student’s score on the first math test and would have to predict the score on the second math test. In that case we would predict a larger increase if we were also told that the student was in the intervention group. We would do so confidently if the student had a low score on the first test and less so if the initial score was higher. This makes sense. Fostering grit is likely to benefit those who need to work the hardest for a good score.</p>
+</div>
+<div id="missing-values" class="section level3">
+<h3>Missing values</h3>
+<p>Next, we want to get an overview of missing values.</p>
+<pre class="r"><code>vis_miss(data2)</code></pre>
+<p><img src="/post/2021-01-25-math-grit-and-multilevel-models-part-1/index.en_files/figure-html/unnamed-chunk-1-1.png" width="672" />
+We note that about 10% of values are missing. Let’s look at hotspots of missingsness.</p>
+<pre class="r"><code>gg_miss_upset(data2)</code></pre>
+<p><img src="/post/2021-01-25-math-grit-and-multilevel-models-part-1/index.en_files/figure-html/unnamed-chunk-2-1.png" width="672" />
+The main culprits are mathscore3 and verbalscore3, which is as expected given that mathscore1 and mathscore2 were obtained right before and after the experiment, while mathscore3 was collected two and a half years later.</p>
+<p>Leaving the missing data out is a bad idea, because they could bias results and increase the standard error. Below we see that the missingness of scores on the math tests is not distributed evenly over the control and intervention groups, for example.</p>
+<pre class="r"><code>data2 %&gt;% 
+  select(mathscore2, grit, mathscore3) %&gt;%  # replace to your needs
+  group_by(grit) %&gt;% 
+  summarise_all(funs(sum(is.na(.))))</code></pre>
+<pre><code>## # A tibble: 2 x 3
+##   grit         mathscore2 mathscore3
+##   &lt;fct&gt;             &lt;int&gt;      &lt;int&gt;
+## 1 control              62        384
+## 2 intervention         90        334</code></pre>
+<p>So instead we impute values. That is, we carry out a bunch of regressions in several orders until the imputed values converge. The regression models have an error component however, such as the standard deviation for a standard linear regression. When we predict one value from such a model, it will be a little different every time. We deal with this problem by making many predictions, and storing them in several data sets, which we will then all feed into the model that we use for our analysis. The package <code>mice</code> does the imputation for us. We only need to specify which method should be used for which type of variable.</p>
+<pre class="r"><code>data2_imp &lt;- mice(data2, m = 5, 
+                         defaultMethod =c(&quot;cart&quot;, &quot;lda&quot;, &quot;pmm&quot;, &quot;polr&quot;),
+                  file=&quot;fits/data2_imp&quot;)</code></pre>
+<pre><code>## 
+##  iter imp variable
+##   1   1  mathscore1  verbalscore1  mathscore2  verbalscore2  mathscore3  verbalscore3  mathgrade2  verbalgrade2  task_ability*  choicer1  choicer2  choicer3  choicer4  choicer5  playedr1  alldiff  choicev2  playedv2  successr1  successr2  successr3  successr4  successr5  successv2  payoffr1*  payoffr2*  payoffr3*  payoffr4*  payoffr5*  payoffv2*  bothpayoffs*  avpayoffv1*  belief_survey1  grit_survey1  belief_survey2  grit_survey2  confidence_survey2  age  risk*  success*  wealth*  raven  math_diff
+##   1   2  mathscore1  verbalscore1  mathscore2  verbalscore2  mathscore3  verbalscore3  mathgrade2  verbalgrade2  task_ability*  choicer1  choicer2  choicer3  choicer4  choicer5  playedr1  alldiff  choicev2  playedv2  successr1  successr2  successr3  successr4  successr5  successv2  payoffr1*  payoffr2*  payoffr3*  payoffr4*  payoffr5*  payoffv2*  bothpayoffs*  avpayoffv1*  belief_survey1  grit_survey1  belief_survey2  grit_survey2  confidence_survey2  age  risk*  success*  wealth*  raven  math_diff
+##   1   3  mathscore1  verbalscore1  mathscore2  verbalscore2  mathscore3  verbalscore3  mathgrade2  verbalgrade2  task_ability*  choicer1  choicer2  choicer3  choicer4  choicer5  playedr1  alldiff  choicev2  playedv2  successr1  successr2  successr3  successr4  successr5  successv2  payoffr1*  payoffr2*  payoffr3*  payoffr4*  payoffr5*  payoffv2*  bothpayoffs*  avpayoffv1*  belief_survey1  grit_survey1  belief_survey2  grit_survey2  confidence_survey2  age  risk*  success*  wealth*  raven  math_diff
+##   1   4  mathscore1  verbalscore1  mathscore2  verbalscore2  mathscore3  verbalscore3  mathgrade2  verbalgrade2  task_ability*  choicer1  choicer2  choicer3  choicer4  choicer5  playedr1  alldiff  choicev2  playedv2  successr1  successr2  successr3  successr4  successr5  successv2  payoffr1*  payoffr2*  payoffr3*  payoffr4*  payoffr5*  payoffv2*  bothpayoffs*  avpayoffv1*  belief_survey1  grit_survey1  belief_survey2  grit_survey2  confidence_survey2  age  risk*  success*  wealth*  raven  math_diff
+##   1   5  mathscore1  verbalscore1  mathscore2  verbalscore2  mathscore3  verbalscore3  mathgrade2  verbalgrade2  task_ability*  choicer1  choicer2  choicer3  choicer4  choicer5  playedr1  alldiff  choicev2  playedv2  successr1  successr2  successr3  successr4  successr5  successv2  payoffr1*  payoffr2*  payoffr3*  payoffr4*  payoffr5*  payoffv2*  bothpayoffs*  avpayoffv1*  belief_survey1  grit_survey1  belief_survey2  grit_survey2  confidence_survey2  age  risk*  success*  wealth*  raven  math_diff
+##   2   1  mathscore1  verbalscore1  mathscore2  verbalscore2  mathscore3  verbalscore3  mathgrade2  verbalgrade2  task_ability*  choicer1  choicer2  choicer3  choicer4  choicer5  playedr1  alldiff  choicev2  playedv2  successr1  successr2  successr3  successr4  successr5  successv2  payoffr1*  payoffr2*  payoffr3*  payoffr4*  payoffr5*  payoffv2*  bothpayoffs*  avpayoffv1*  belief_survey1  grit_survey1  belief_survey2  grit_survey2  confidence_survey2  age  risk*  success*  wealth*  raven  math_diff
+##   2   2  mathscore1  verbalscore1  mathscore2  verbalscore2  mathscore3  verbalscore3  mathgrade2  verbalgrade2  task_ability*  choicer1  choicer2  choicer3  choicer4  choicer5  playedr1  alldiff  choicev2  playedv2  successr1  successr2  successr3  successr4  successr5  successv2  payoffr1*  payoffr2*  payoffr3*  payoffr4*  payoffr5*  payoffv2*  bothpayoffs*  avpayoffv1*  belief_survey1  grit_survey1  belief_survey2  grit_survey2  confidence_survey2  age  risk*  success*  wealth*  raven  math_diff
+##   2   3  mathscore1  verbalscore1  mathscore2  verbalscore2  mathscore3  verbalscore3  mathgrade2  verbalgrade2  task_ability*  choicer1  choicer2  choicer3  choicer4  choicer5  playedr1  alldiff  choicev2  playedv2  successr1  successr2  successr3  successr4  successr5  successv2  payoffr1*  payoffr2*  payoffr3*  payoffr4*  payoffr5*  payoffv2*  bothpayoffs*  avpayoffv1*  belief_survey1  grit_survey1  belief_survey2  grit_survey2  confidence_survey2  age  risk*  success*  wealth*  raven  math_diff
+##   2   4  mathscore1  verbalscore1  mathscore2  verbalscore2  mathscore3  verbalscore3  mathgrade2  verbalgrade2  task_ability*  choicer1  choicer2  choicer3  choicer4  choicer5  playedr1  alldiff  choicev2  playedv2  successr1  successr2  successr3  successr4  successr5  successv2  payoffr1*  payoffr2*  payoffr3*  payoffr4*  payoffr5*  payoffv2*  bothpayoffs*  avpayoffv1*  belief_survey1  grit_survey1  belief_survey2  grit_survey2  confidence_survey2  age  risk*  success*  wealth*  raven  math_diff
+##   2   5  mathscore1  verbalscore1  mathscore2  verbalscore2  mathscore3  verbalscore3  mathgrade2  verbalgrade2  task_ability*  choicer1  choicer2  choicer3  choicer4  choicer5  playedr1  alldiff  choicev2  playedv2  successr1  successr2  successr3  successr4  successr5  successv2  payoffr1*  payoffr2*  payoffr3*  payoffr4*  payoffr5*  payoffv2*  bothpayoffs*  avpayoffv1*  belief_survey1  grit_survey1  belief_survey2  grit_survey2  confidence_survey2  age  risk*  success*  wealth*  raven  math_diff
+##   3   1  mathscore1  verbalscore1  mathscore2  verbalscore2  mathscore3  verbalscore3  mathgrade2  verbalgrade2  task_ability*  choicer1  choicer2  choicer3  choicer4  choicer5  playedr1  alldiff  choicev2  playedv2  successr1  successr2  successr3  successr4  successr5  successv2  payoffr1*  payoffr2*  payoffr3*  payoffr4*  payoffr5*  payoffv2*  bothpayoffs*  avpayoffv1*  belief_survey1  grit_survey1  belief_survey2  grit_survey2  confidence_survey2  age  risk*  success*  wealth*  raven  math_diff
+##   3   2  mathscore1  verbalscore1  mathscore2  verbalscore2  mathscore3  verbalscore3  mathgrade2  verbalgrade2  task_ability*  choicer1  choicer2  choicer3  choicer4  choicer5  playedr1  alldiff  choicev2  playedv2  successr1  successr2  successr3  successr4  successr5  successv2  payoffr1*  payoffr2*  payoffr3*  payoffr4*  payoffr5*  payoffv2*  bothpayoffs*  avpayoffv1*  belief_survey1  grit_survey1  belief_survey2  grit_survey2  confidence_survey2  age  risk*  success*  wealth*  raven  math_diff
+##   3   3  mathscore1  verbalscore1  mathscore2  verbalscore2  mathscore3  verbalscore3  mathgrade2  verbalgrade2  task_ability*  choicer1  choicer2  choicer3  choicer4  choicer5  playedr1  alldiff  choicev2  playedv2  successr1  successr2  successr3  successr4  successr5  successv2  payoffr1*  payoffr2*  payoffr3*  payoffr4*  payoffr5*  payoffv2*  bothpayoffs*  avpayoffv1*  belief_survey1  grit_survey1  belief_survey2  grit_survey2  confidence_survey2  age  risk*  success*  wealth*  raven  math_diff
+##   3   4  mathscore1  verbalscore1  mathscore2  verbalscore2  mathscore3  verbalscore3  mathgrade2  verbalgrade2  task_ability*  choicer1  choicer2  choicer3  choicer4  choicer5  playedr1  alldiff  choicev2  playedv2  successr1  successr2  successr3  successr4  successr5  successv2  payoffr1*  payoffr2*  payoffr3*  payoffr4*  payoffr5*  payoffv2*  bothpayoffs*  avpayoffv1*  belief_survey1  grit_survey1  belief_survey2  grit_survey2  confidence_survey2  age  risk*  success*  wealth*  raven  math_diff
+##   3   5  mathscore1  verbalscore1  mathscore2  verbalscore2  mathscore3  verbalscore3  mathgrade2  verbalgrade2  task_ability*  choicer1  choicer2  choicer3  choicer4  choicer5  playedr1  alldiff  choicev2  playedv2  successr1  successr2  successr3  successr4  successr5  successv2  payoffr1*  payoffr2*  payoffr3*  payoffr4*  payoffr5*  payoffv2*  bothpayoffs*  avpayoffv1*  belief_survey1  grit_survey1  belief_survey2  grit_survey2  confidence_survey2  age  risk*  success*  wealth*  raven  math_diff
+##   4   1  mathscore1  verbalscore1  mathscore2  verbalscore2  mathscore3  verbalscore3  mathgrade2  verbalgrade2  task_ability*  choicer1  choicer2  choicer3  choicer4  choicer5  playedr1  alldiff  choicev2  playedv2  successr1  successr2  successr3  successr4  successr5  successv2  payoffr1*  payoffr2*  payoffr3*  payoffr4*  payoffr5*  payoffv2*  bothpayoffs*  avpayoffv1*  belief_survey1  grit_survey1  belief_survey2  grit_survey2  confidence_survey2  age  risk*  success*  wealth*  raven  math_diff
+##   4   2  mathscore1  verbalscore1  mathscore2  verbalscore2  mathscore3  verbalscore3  mathgrade2  verbalgrade2  task_ability*  choicer1  choicer2  choicer3  choicer4  choicer5  playedr1  alldiff  choicev2  playedv2  successr1  successr2  successr3  successr4  successr5  successv2  payoffr1*  payoffr2*  payoffr3*  payoffr4*  payoffr5*  payoffv2*  bothpayoffs*  avpayoffv1*  belief_survey1  grit_survey1  belief_survey2  grit_survey2  confidence_survey2  age  risk*  success*  wealth*  raven  math_diff
+##   4   3  mathscore1  verbalscore1  mathscore2  verbalscore2  mathscore3  verbalscore3  mathgrade2  verbalgrade2  task_ability*  choicer1  choicer2  choicer3  choicer4  choicer5  playedr1  alldiff  choicev2  playedv2  successr1  successr2  successr3  successr4  successr5  successv2  payoffr1*  payoffr2*  payoffr3*  payoffr4*  payoffr5*  payoffv2*  bothpayoffs*  avpayoffv1*  belief_survey1  grit_survey1  belief_survey2  grit_survey2  confidence_survey2  age  risk*  success*  wealth*  raven  math_diff
+##   4   4  mathscore1  verbalscore1  mathscore2  verbalscore2  mathscore3  verbalscore3  mathgrade2  verbalgrade2  task_ability*  choicer1  choicer2  choicer3  choicer4  choicer5  playedr1  alldiff  choicev2  playedv2  successr1  successr2  successr3  successr4  successr5  successv2  payoffr1*  payoffr2*  payoffr3*  payoffr4*  payoffr5*  payoffv2*  bothpayoffs*  avpayoffv1*  belief_survey1  grit_survey1  belief_survey2  grit_survey2  confidence_survey2  age  risk*  success*  wealth*  raven  math_diff
+##   4   5  mathscore1  verbalscore1  mathscore2  verbalscore2  mathscore3  verbalscore3  mathgrade2  verbalgrade2  task_ability*  choicer1  choicer2  choicer3  choicer4  choicer5  playedr1  alldiff  choicev2  playedv2  successr1  successr2  successr3  successr4  successr5  successv2  payoffr1*  payoffr2*  payoffr3*  payoffr4*  payoffr5*  payoffv2*  bothpayoffs*  avpayoffv1*  belief_survey1  grit_survey1  belief_survey2  grit_survey2  confidence_survey2  age  risk*  success*  wealth*  raven  math_diff
+##   5   1  mathscore1  verbalscore1  mathscore2  verbalscore2  mathscore3  verbalscore3  mathgrade2  verbalgrade2  task_ability*  choicer1  choicer2  choicer3  choicer4  choicer5  playedr1  alldiff  choicev2  playedv2  successr1  successr2  successr3  successr4  successr5  successv2  payoffr1*  payoffr2*  payoffr3*  payoffr4*  payoffr5*  payoffv2*  bothpayoffs*  avpayoffv1*  belief_survey1  grit_survey1  belief_survey2  grit_survey2  confidence_survey2  age  risk*  success*  wealth*  raven  math_diff
+##   5   2  mathscore1  verbalscore1  mathscore2  verbalscore2  mathscore3  verbalscore3  mathgrade2  verbalgrade2  task_ability*  choicer1  choicer2  choicer3  choicer4  choicer5  playedr1  alldiff  choicev2  playedv2  successr1  successr2  successr3  successr4  successr5  successv2  payoffr1*  payoffr2*  payoffr3*  payoffr4*  payoffr5*  payoffv2*  bothpayoffs*  avpayoffv1*  belief_survey1  grit_survey1  belief_survey2  grit_survey2  confidence_survey2  age  risk*  success*  wealth*  raven  math_diff
+##   5   3  mathscore1  verbalscore1  mathscore2  verbalscore2  mathscore3  verbalscore3  mathgrade2  verbalgrade2  task_ability*  choicer1  choicer2  choicer3  choicer4  choicer5  playedr1  alldiff  choicev2  playedv2  successr1  successr2  successr3  successr4  successr5  successv2  payoffr1*  payoffr2*  payoffr3*  payoffr4*  payoffr5*  payoffv2*  bothpayoffs*  avpayoffv1*  belief_survey1  grit_survey1  belief_survey2  grit_survey2  confidence_survey2  age  risk*  success*  wealth*  raven  math_diff
+##   5   4  mathscore1  verbalscore1  mathscore2  verbalscore2  mathscore3  verbalscore3  mathgrade2  verbalgrade2  task_ability*  choicer1  choicer2  choicer3  choicer4  choicer5  playedr1  alldiff  choicev2  playedv2  successr1  successr2  successr3  successr4  successr5  successv2  payoffr1*  payoffr2*  payoffr3*  payoffr4*  payoffr5*  payoffv2*  bothpayoffs*  avpayoffv1*  belief_survey1  grit_survey1  belief_survey2  grit_survey2  confidence_survey2  age  risk*  success*  wealth*  raven  math_diff
+##   5   5  mathscore1  verbalscore1  mathscore2  verbalscore2  mathscore3  verbalscore3  mathgrade2  verbalgrade2  task_ability*  choicer1  choicer2  choicer3  choicer4  choicer5  playedr1  alldiff  choicev2  playedv2  successr1  successr2  successr3  successr4  successr5  successv2  payoffr1*  payoffr2*  payoffr3*  payoffr4*  payoffr5*  payoffv2*  bothpayoffs*  avpayoffv1*  belief_survey1  grit_survey1  belief_survey2  grit_survey2  confidence_survey2  age  risk*  success*  wealth*  raven  math_diff</code></pre>
+<pre class="r"><code>stripplot(data2_imp, verbalscore3 ~ age | .imp, pch = 20, cex = 0.1,
+                    jitter.data = TRUE)</code></pre>
+<p><img src="/post/2021-01-25-math-grit-and-multilevel-models-part-1/index.en_files/figure-html/mice-1.png" width="672" /></p>
+<pre class="r"><code>stripplot(data2_imp, mathscore3 ~ age | .imp, pch = 20, cex = 0.1,
+                    jitter.data = TRUE)</code></pre>
+<p><img src="/post/2021-01-25-math-grit-and-multilevel-models-part-1/index.en_files/figure-html/mice-2.png" width="672" /></p>
+<pre class="r"><code>stripplot(data2_imp, age ~ mathscore2 | .imp, pch = 20, cex = 0.1,
+                    factor=2,
+                    jitter.data = TRUE)</code></pre>
+<p><img src="/post/2021-01-25-math-grit-and-multilevel-models-part-1/index.en_files/figure-html/mice-3.png" width="672" />
+The graphs of the imputation process suggest that we haven’t imputed any crazy values.</p>
+</div>
