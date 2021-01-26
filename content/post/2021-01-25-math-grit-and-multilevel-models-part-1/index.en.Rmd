@@ -18,11 +18,9 @@ projects: []
 ---
 
 
-Teachers tell their students that perseverance pays off in the end. However, twin studies have shown that a large chunk of learning outcomes are explained by genetics. So does sticking to it really improve grades? And if so, by how much, compared to for example IQ? And even if there were an effect of grit on grades, can it be instilled in students in school, or is it ingrained because of genetics or child rearing?
+Students are often told that perseverance pays off in the end. But does it? And if it does, can it be instilled in students? According to the authors of a large experiment in Turkey, the answer to these questions is yes. In this blogpost we scrutinze their results, which have been made public [here](https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi%3A10.7910/DVN/SAVGAL) in an exemplary way.  
 
-A recent study carried out in Turkey claims to show that grit does indeed matter. The study was designed in such a way that grit could shine. Effects on grades are in general bigger for younger children, while grit interventions benefit kids from lower social economic backgrounds more. The study was therefore carried out with 10 year olds from poorer families. We use data from the second wave of the study, because it allows us to make causal inferences.
-
-We load r packages together with the data, mutate categorical variables, and have a quick look.  
+We use data from the second wave of the study, because it allows us to make causal inferences. We load r packages together with the data, mutate categorical variables, and have a quick look at the variables.  
 
 ```{r data, warning = FALSE, message = FALSE}
 library(haven)
@@ -36,30 +34,34 @@ library(patchwork)
 library(tinytex)
 library(forcats) 
 
-# second sample 1499 students
+# second sample of 1499 students
 data2 <- read_dta(here("content/post/2021-01-25-math-grit-and-multilevel-models-part-1/Sample2_Data.dta"))
-  
+
+# variables with common words can be factorized more efficiently
 data2 <- data2 %>% mutate_at(vars(matches("choice")), as.factor) %>% 
                     mutate_at(vars(matches("success")), as.factor) %>% 
                     mutate_at(vars(matches("payoff")), as.factor) %>%     
                     mutate_at(vars(matches("difficult")), as.factor)
 
+# the rest is done by hand
 cols <- c("sample", "schoolid", "classid", "grit", "task_ability", "playedr1", "alldiff", "playedv2", "inconsistent", "male", "risk", "wealth")
 
 data2 <- data2 %>% mutate_at(cols, funs(factor(.)))
 
+# We rename the grit variable to clarify its importance
 data2 <- data2 %>%  mutate(grit = fct_recode(grit,
                     "control" = "0",
                     "intervention" = "1"))
 
 glimpse(data2)
 
-is.ordered(data2$successr2)
 ```
+
+We notice that numeric variables have already been standardized. This makes comparisons of their relative effects easier.
 
 ### Visual exploration
 
-For the experiment 16 schools were randomly divided into a control and intervention group, where special training in grit was given to the students. Let's see how schools, classes and students were divided over de two groups. 
+For the experiment 16 schools were randomly divided into a control and intervention group. In the intervention group students followed a special training program to increase their grit. Let us see how schools, classes and students were divided over the two groups. 
 
 ```{r students_per_group, warning=FALSE, message=FALSE}
 data2 %>% group_by(grit) %>% 
@@ -67,32 +69,48 @@ data2 %>% group_by(grit) %>%
             count_class = n_distinct(classid), 
             count_students = n_distinct(studentid))
 ```
-Whereas schools were divided evenly over the groups, classes and students were not. This confirms that the researchers exerted control over the allocations of schools, but not classes and students. 
+Whereas schools were divided evenly over the groups, classes and students were not. This confirms that the researchers exerted control over the allocation of schools, but not over classes and students. 
 
-Regardless, properties such as IQ and verbal scores are pretty evenly distributed among the two groups. This is not true for wealth though, a variable that measures the income group of the parents.
+Regardless, the graphs below show that properties such as raven IQ and verbal scores are pretty evenly distributed among the two groups. This is not true for wealth though, a variable that measures the income group of the parents.
 
 ```{r two_groups, warning=FALSE}
-
 
 p1 <- data2 %>% ggplot(aes(x=raven)) +
   geom_density() +
   facet_wrap(~ grit, nrow=2) +
-  theme_tufte()
+  labs(x="raven IQ score") +
+  theme_tufte() +
+    theme(
+    panel.border = element_rect(colour = "black", fill=NA, size=1),
+    strip.background = element_rect(
+     color="black", fill="#F9EBEA", size=1.5, linetype="solid"
+     ))
 
 p2 <- data2 %>% drop_na() %>% 
   ggplot(aes(x=wealth)) +
   geom_bar(aes(x = wealth, y = ..prop.., group=1), stat = "count") +
   facet_wrap(~ grit, nrow=2)+
   labs(y="proportion") +
-  theme_tufte()
+  theme_tufte()+
+    theme(
+    panel.border = element_rect(colour = "black", fill=NA, size=1),
+    strip.background = element_rect(
+     color="black", fill="#F9EBEA", size=1.5, linetype="solid"
+     ))
 
 p3 <- data2 %>% group_by(grit) %>% ggplot(aes(x=verbalscore1)) +
   geom_bar(aes(x = verbalscore1, y = ..prop..), stat = "count", width=0.7) +
   facet_wrap(~ grit, nrow=2)+
-  labs(y="proportion") +
-  theme_tufte()
+  labs(x="verbal score 1", y="proportion") +
+  theme_tufte()+
+    theme(
+    panel.border = element_rect(colour = "black", fill=NA, size=1),
+    strip.background = element_rect(
+     color="black", fill="#F9EBEA", size=1.5, linetype="solid"
+     ))
 
 p1 + p3 +p2 
+
 
 ```
 
@@ -107,7 +125,12 @@ ggplot(data = na.omit(data2[c("grit", "wealth", "math_diff")]), aes(factor(wealt
   labs(y="difference in math scores",
        x= "wealth groups") +
   geom_hline(yintercept = 0, color="red", size=1) +
-  theme_tufte()
+  theme_tufte() +
+  theme(
+    panel.border = element_rect(colour = "black", fill=NA, size=1),
+    strip.background = element_rect(
+     color="black", fill="#F9EBEA", size=1.5, linetype="solid"
+     ))
 ```
 There is some movement in the intervention group. Pupils from lower wealth classes seem to benefit from the grit intervention, whereas those from higher wealth classes may suffer. 
 
@@ -118,11 +141,13 @@ Let us also quickly check if the difference in math scores depends on the skill 
 data2 %>% ggplot(aes(x=mathscore1, y=mathscore2, color=grit)) +
   geom_jitter() +
   geom_smooth(method="lm") +
-  scale_color_manual(values=c("#999999", "#E69F00")) +
-  theme_tufte()
+  scale_color_manual(values=c("grey", "red")) +
+  theme_tufte() +
+  theme(
+    panel.border = element_rect(colour = "black", fill=NA, size=1))
 
 ```
-The graph can be interpreted as follows. Suppose we were given a student's score on the first math test and would have to predict the score on the second math test. In that case we would predict a larger increase if we were also told that the student was in the intervention group. We would do so confidently if the student had a low score on the first test and less so if the initial score was higher. This makes sense. Fostering grit is likely to benefit those who need to work the hardest for a good score.   
+The graph can be interpreted as follows. Suppose we were given a student's score on the first math test and asked to predict the score on the second math test. In that case we would predict a larger increase if we were also told that the student was in the intervention group. We would do so confidently if the student had a low score on the first test and less so if the initial score was higher. This makes sense. Fostering grit is likely to benefit those who need to work the hardest for a good score.   
 
 ### Missing values
 Next, we want to get an overview of missing values.
@@ -142,7 +167,7 @@ Leaving the missing data out is a bad idea, because they could bias results and 
 ```{r}
 
 data2 %>% 
-  select(mathscore2, grit, mathscore3) %>%  # replace to your needs
+  select(mathscore2, grit, mathscore3) %>%
   group_by(grit) %>% 
   summarise_all(funs(sum(is.na(.))))
 ```
