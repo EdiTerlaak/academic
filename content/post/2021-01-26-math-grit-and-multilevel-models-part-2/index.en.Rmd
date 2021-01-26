@@ -1,0 +1,185 @@
+---
+title: Math, Grit and Multilevel Models (part 2)
+author: Edi Terlaak
+date: '2021-01-26'
+slug: math-grit-and-multilevel-models-part-2
+categories: []
+tags: []
+subtitle: ''
+summary: ''
+authors: []
+lastmod: '2021-01-26T13:42:16+01:00'
+featured: no
+image:
+  caption: ''
+  focal_point: ''
+  preview_only: no
+projects: []
+---
+
+```{r data, warning = FALSE, message = FALSE, include=FALSE}
+library(haven)
+library(tidyverse)
+library(naniar)
+library(here)
+library(brms)
+library(mice)
+library(ggthemes)
+library(patchwork)
+library(tinytex)
+library(forcats)
+
+# second sample 1499 students
+data2 <- read_dta(here("content/post/2021-01-25-math-grit-and-multilevel-models-part-1/Sample2_Data.dta"))
+  
+data2 <- data2 %>% mutate_at(vars(matches("choice")), as.factor) %>% 
+                    mutate_at(vars(matches("success")), as.factor) %>% 
+                    mutate_at(vars(matches("payoff")), as.factor) %>%     
+                    mutate_at(vars(matches("difficult")), as.factor)
+
+cols <- c("sample", "schoolid", "classid", "grit", "task_ability", "playedr1", "alldiff", "playedv2", "inconsistent", "male", "risk", "wealth")
+
+data2 <- data2 %>% mutate_at(cols, funs(factor(.)))
+
+data2 <- data2 %>%  mutate(grit = fct_recode(grit,
+                    "control" = "0",
+                    "intervention" = "1"))
+
+data2_imp <- mice(data2, m = 5, 
+                         defaultMethod =c("cart", "lda", "pmm", "polr"),
+                  file="fits/data2_imp")
+```
+
+In the previous post we have explored the data visually and dealt with missing data. Here we turn to inference.
+
+### Frequentist inference
+
+We first attempt to replicate the results of Sule and colleagues by building a classical regression model. In it, math scores after the intervention (`mathscore2`) is explained by a number of variables. 
+
+We assume math scores are normally distributed at every level of the predictors. In the formula below, $g_{i}$ is the `grit` variable, which tells us if a participant is in the treatment group or not. Next, $X_{i}$ is the matrix with the observed values of the predictor variables and $\beta$ is the vector with their predictors. They are the adjustment variables that adjust for differeces in the assignment of properties over the control and intervention groups. $\alpha_{i}$ then is the estimated effect of the treatment. For the moment we treat `grit` as if it were assigned at the individual level. All values are standardized, so the estimate of the treatment effect is standardized as well. Finally, $\sigma_{i}$ denotes the error around any one predicted point that arises because the model will not match the data points perfectly.  
+
+
+$$y_{i} \sim N(g_{i}\alpha_{i}+X_{i}\beta +\sigma_{i}),\ for\ \ i\ = 1, 2,\ ...,\ n $$
+
+So what variables should we adjust for? What is in $X_{i}$? 
+
+The authors write that they "control for gender, the Raven score, class size, and baseline beliefs and test scores in the estimation." (p. 13)
+
+We run a classical regression model with the specified adjustment variables. 
+
+```{r}
+model1 <- lm(mathscore2 ~  male + raven + csize + belief_survey1 + mathscore1 + grit, data=data2)
+summary(model1)
+
+```
+
+We get an estimate of the effect of the intervention (`grit`) that is close to the number in the paper (0.339 in our model vs 0.311 in the paper). We will refer to `model1` as the author's model. 
+
+A natural question to ask is what happens if we leave out the adjustment variables.
+
+```{r}
+model2 <- lm(mathscore2 ~ mathscore1 + grit, data=data2)
+summary(model2)
+```
+We notice that the effect shrinks to 0.176. This is not to say that the effect of `grit` is overblown. But it does show that the choice of variables makes a difference. There are lots of variables to adjust for. So why pick the ones that were picked in the paper?
+
+Adding a variable with responses to survey questions on grit from before the intervention seems relevant to measure the effect of `grit` for example.
+
+```{r}
+model3 <- lm(mathscore2 ~  male + raven + csize + belief_survey1 + mathscore1 + grit + grit_survey1, data=data2)
+summary(model3)
+```
+We notice that the estimated effect shrinks to 0.269. 
+
+If we extend the list of adjustment variables with `age` and `wealth`, we get back to 0.321. 
+
+```{r}
+model4 <- lm(mathscore2 ~  male + raven + csize + belief_survey1 + mathscore1 + grit + grit_survey1 + age + wealth -1, data=data2)
+summary(model4)
+```
+In an experiment, the causal links between the variables and the outcome are cut by the randomizing process. In this experiment the cut was made at the *group level* however, which may have left causal links at the individual level in tact. Here we merely note the instability of the effect size given the choice of adjustment variables and proceed with the model of the authors.
+
+### Effect of missing data
+
+Next, we want to know what the effect of the imputation is on the estimate of `grit` in model1. 
+
+```{r}
+fit_imp_lm <- with(data2_imp, lm(mathscore2 ~  male + raven + csize + belief_survey1 + mathscore1 +grit))
+
+# Pool and summarize regression results
+lm_pooled <- pool(fit_imp_lm)
+summary(lm_pooled, conf.int = TRUE, conf.level = 0.95)
+```
+We note that the effect of grit has decreases from 0.339 to 0.253, while the standard error barely moved.
+
+We repeat this procedure for the estimate of `grit` on the scores on a math test 2.5 years later.
+
+```{r}
+
+# Model of mathscore3 with missing data left out
+model5 <- lm(mathscore3 ~  male + raven + csize + belief_survey1 + mathscore1 +grit, data=data2)
+summary(model5)
+
+fit_imp_lm <- with(data2_imp, lm(mathscore3 ~  male + raven + csize + belief_survey1 + mathscore1 +grit))
+
+# Model of mathscore3 with missing data imputed
+lm_pooled <- pool(fit_imp_lm)
+summary(lm_pooled)
+```
+The model that uses imputed values estimates the effect to be 0.138, compared to 0.213 for the same model where missing data were simply left out. 
+
+### Multilevel Bayesian inference
+
+We now extend the model to include explanations at the group level. To this end we add $\alpha_{[j]i}$, which can be read as a sequence of indicator variables, one for each of the J schools. 
+
+$$y_{i} \sim N(\alpha_{[j]i}+X_{i}\beta +\sigma_{i}),\ for\ \ i\ = 1, 2,\ ...,\ n $$
+
+The model become multilevel because we set up a model for the indicators at the group level. That is, we model the school indicators as normally distributed, where $\gamma_{1}$ denotes if they were in the treatment group or not. The random assignment took place at the level of the school, so it makes sense to insert the `grit` variable at this level. 
+
+$$\alpha_{j} \sim N(\gamma_{0}+\gamma_{1}u_{j} +\sigma_{j}),\ for\ \ j\ = 1, 2,\ ...,\ J $$
+
+```{r, warning=FALSE, message = FALSE}
+
+brm_school1 <- 
+  brm_multiple(data = data2_imp, 
+      family = gaussian,
+      mathscore2 ~  1 + male + raven + csize + belief_survey1 + mathscore1 + grit + (1 | schoolid),
+      iter = 2000, warmup = 1000, chains = 4, cores = 4,  
+      seed = 4387510, 
+      file = "fits/brm_school1")
+
+print(brm_school1)
+
+```
+
+We notice that the effect of the grit intervention is now estimated to be 0.24, which is a little smaller than the individual level regression (where a bayesian version not shown here gave the same estimate). Furthermore, the standard deviation of math scores among schools is 0.18, while the variation between students is captured by a standard deviation of 0.81. Hence, there will be a significant pull on the estimate towards the group means. 
+
+Now what's the fun of having only one level? We also have variation at a level between that of the student and the school, which has been captured in the data set by the variable `classid`. So let's add it in.
+
+$$y_{i} \sim N(\eta_{[k]i}+X_{i}\beta +\sigma_{i}),\ for\ \ i\ = 1, 2,\ ...,\ n $$
+
+$$\eta{j} \sim N(\nu_{k} +\alpha_{[j]k}+\sigma_{k}),\ for\ \ k\ = 1, 2,\ ...,\ K $$
+
+$$\alpha_{j} \sim N(\gamma_{0}+\gamma_{1}u_{j} +\sigma_{j}),\ for\ \ j\ = 1, 2,\ ...,\ J $$
+
+
+```{r double_nested, warning=FALSE, message=FALSE}
+
+brm_school_class5 <- 
+  brm_multiple(data = data2_imp, 
+      family = gaussian,
+      mathscore2 ~  1 + male + raven + csize + belief_survey1 + mathscore1 + grit + (1 | schoolid/classid),
+      prior = c(prior(normal(0, 10), class = Intercept),
+                prior(normal(0, 10), class = b),
+                prior(cauchy(0, 10), class = sd),
+                prior(cauchy(0, 10), class = sigma)),
+      iter = 2000, warmup = 1000, chains = 4, cores = 4,  
+      seed = 4387510,
+      control = list(adapt_delta = .95),
+      file = "fits/brm_school_class5")
+
+print(brm_school_class5)
+
+
+```
+In this final model, in which we took account of variation at the class level as well, the estimate of `grit` is smaller still at 0.22. As we account for more variation that was not adjusted for by the randomization at the school level, the effect shrinks further still. On the other hand, it does not disappear either, so that there is reason to believe that the intervention was effective.  

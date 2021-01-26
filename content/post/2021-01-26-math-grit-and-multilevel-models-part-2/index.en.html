@@ -1,0 +1,315 @@
+---
+title: Math, Grit and Multilevel Models (part 2)
+author: Edi Terlaak
+date: '2021-01-26'
+slug: math-grit-and-multilevel-models-part-2
+categories: []
+tags: []
+subtitle: ''
+summary: ''
+authors: []
+lastmod: '2021-01-26T13:42:16+01:00'
+featured: no
+image:
+  caption: ''
+  focal_point: ''
+  preview_only: no
+projects: []
+---
+
+
+
+<p>In the previous post we have explored the data visually and dealt with missing data. Here we turn to inference.</p>
+<div id="frequentist-inference" class="section level3">
+<h3>Frequentist inference</h3>
+<p>We first attempt to replicate the results of Sule and colleagues by building a classical regression model. In it, math scores after the intervention (<code>mathscore2</code>) is explained by a number of variables.</p>
+<p>We assume math scores are normally distributed at every level of the predictors. In the formula below, <span class="math inline">\(g_{i}\)</span> is the <code>grit</code> variable, which tells us if a participant is in the treatment group or not. Next, <span class="math inline">\(X_{i}\)</span> is the matrix with the observed values of the predictor variables and <span class="math inline">\(\beta\)</span> is the vector with their predictors. They are the adjustment variables that adjust for differeces in the assignment of properties over the control and intervention groups. <span class="math inline">\(\alpha_{i}\)</span> then is the estimated effect of the treatment. For the moment we treat <code>grit</code> as if it were assigned at the individual level. All values are standardized, so the estimate of the treatment effect is standardized as well. Finally, <span class="math inline">\(\sigma_{i}\)</span> denotes the error around any one predicted point that arises because the model will not match the data points perfectly.</p>
+<p><span class="math display">\[y_{i} \sim N(g_{i}\alpha_{i}+X_{i}\beta +\sigma_{i}),\ for\ \ i\ = 1, 2,\ ...,\ n \]</span></p>
+<p>So what variables should we adjust for? What is in <span class="math inline">\(X_{i}\)</span>?</p>
+<p>The authors write that they “control for gender, the Raven score, class size, and baseline beliefs and test scores in the estimation.” (p. 13)</p>
+<p>We run a classical regression model with the specified adjustment variables.</p>
+<pre class="r"><code>model1 &lt;- lm(mathscore2 ~  male + raven + csize + belief_survey1 + mathscore1 + grit, data=data2)
+summary(model1)</code></pre>
+<pre><code>## 
+## Call:
+## lm(formula = mathscore2 ~ male + raven + csize + belief_survey1 + 
+##     mathscore1 + grit, data = data2)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -2.75378 -0.49601  0.03382  0.54931  2.22676 
+## 
+## Coefficients:
+##                   Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)       0.388611   0.132002   2.944   0.0033 ** 
+## male1             0.005715   0.046441   0.123   0.9021    
+## raven             0.389370   0.026448  14.722  &lt; 2e-16 ***
+## csize            -0.013965   0.003568  -3.914 9.60e-05 ***
+## belief_survey1    0.007380   0.023611   0.313   0.7547    
+## mathscore1        0.277750   0.025870  10.736  &lt; 2e-16 ***
+## gritintervention  0.339352   0.050364   6.738 2.51e-11 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## Residual standard error: 0.7922 on 1173 degrees of freedom
+##   (319 observations deleted due to missingness)
+## Multiple R-squared:  0.3659, Adjusted R-squared:  0.3627 
+## F-statistic: 112.8 on 6 and 1173 DF,  p-value: &lt; 2.2e-16</code></pre>
+<p>We get an estimate of the effect of the intervention (<code>grit</code>) that is close to the number in the paper (0.339 in our model vs 0.311 in the paper). We will refer to <code>model1</code> as the author’s model.</p>
+<p>A natural question to ask is what happens if we leave out the adjustment variables.</p>
+<pre class="r"><code>model2 &lt;- lm(mathscore2 ~ mathscore1 + grit, data=data2)
+summary(model2)</code></pre>
+<pre><code>## 
+## Call:
+## lm(formula = mathscore2 ~ mathscore1 + grit, data = data2)
+## 
+## Residuals:
+##     Min      1Q  Median      3Q     Max 
+## -3.2245 -0.5705  0.0657  0.5790  2.4128 
+## 
+## Coefficients:
+##                  Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)      -0.05896    0.03298  -1.788 0.074081 .  
+## mathscore1        0.46595    0.02507  18.583  &lt; 2e-16 ***
+## gritintervention  0.17631    0.05105   3.454 0.000572 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## Residual standard error: 0.8763 on 1209 degrees of freedom
+##   (287 observations deleted due to missingness)
+## Multiple R-squared:  0.2271, Adjusted R-squared:  0.2258 
+## F-statistic: 177.6 on 2 and 1209 DF,  p-value: &lt; 2.2e-16</code></pre>
+<p>We notice that the effect shrinks to 0.176. This is not to say that the effect of <code>grit</code> is overblown. But it does show that the choice of variables makes a difference. There are lots of variables to adjust for. So why pick the ones that were picked in the paper?</p>
+<p>Adding a variable with responses to survey questions on grit from before the intervention seems relevant to measure the effect of <code>grit</code> for example.</p>
+<pre class="r"><code>model3 &lt;- lm(mathscore2 ~  male + raven + csize + belief_survey1 + mathscore1 + grit + grit_survey1, data=data2)
+summary(model3)</code></pre>
+<pre><code>## 
+## Call:
+## lm(formula = mathscore2 ~ male + raven + csize + belief_survey1 + 
+##     mathscore1 + grit + grit_survey1, data = data2)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -2.46442 -0.47280  0.03502  0.55390  1.97613 
+## 
+## Coefficients:
+##                   Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)       0.465399   0.127349   3.655 0.000269 ***
+## male1             0.093703   0.046037   2.035 0.042043 *  
+## raven             0.311069   0.027044  11.503  &lt; 2e-16 ***
+## csize            -0.017353   0.003455  -5.023 5.90e-07 ***
+## belief_survey1   -0.005190   0.023093  -0.225 0.822231    
+## mathscore1        0.175285   0.026999   6.492 1.26e-10 ***
+## gritintervention  0.348122   0.049000   7.105 2.12e-12 ***
+## grit_survey1      0.268547   0.027547   9.749  &lt; 2e-16 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## Residual standard error: 0.7595 on 1139 degrees of freedom
+##   (352 observations deleted due to missingness)
+## Multiple R-squared:  0.4099, Adjusted R-squared:  0.4063 
+## F-statistic:   113 on 7 and 1139 DF,  p-value: &lt; 2.2e-16</code></pre>
+<p>We notice that the estimated effect shrinks to 0.269.</p>
+<p>If we extend the list of adjustment variables with <code>age</code> and <code>wealth</code>, we get back to 0.321.</p>
+<pre class="r"><code>model4 &lt;- lm(mathscore2 ~  male + raven + csize + belief_survey1 + mathscore1 + grit + grit_survey1 + age + wealth -1, data=data2)
+summary(model4)</code></pre>
+<pre><code>## 
+## Call:
+## lm(formula = mathscore2 ~ male + raven + csize + belief_survey1 + 
+##     mathscore1 + grit + grit_survey1 + age + wealth - 1, data = data2)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -2.44528 -0.47096  0.01795  0.52989  1.87278 
+## 
+## Coefficients:
+##                   Estimate Std. Error t value Pr(&gt;|t|)    
+## male0             0.609473   0.484953   1.257   0.2092    
+## male1             0.739472   0.491155   1.506   0.1325    
+## raven             0.305226   0.031312   9.748  &lt; 2e-16 ***
+## csize            -0.020066   0.003903  -5.142 3.35e-07 ***
+## belief_survey1   -0.005337   0.025263  -0.211   0.8327    
+## mathscore1        0.177044   0.029890   5.923 4.51e-09 ***
+## gritintervention  0.320626   0.054362   5.898 5.23e-09 ***
+## grit_survey1      0.263701   0.031839   8.282 4.42e-16 ***
+## age              -0.007721   0.049663  -0.155   0.8765    
+## wealth2           0.087266   0.085567   1.020   0.3081    
+## wealth3           0.067552   0.081169   0.832   0.4055    
+## wealth4           0.066026   0.094371   0.700   0.4843    
+## wealth5          -0.276895   0.154563  -1.791   0.0736 .  
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## Residual standard error: 0.7358 on 887 degrees of freedom
+##   (599 observations deleted due to missingness)
+## Multiple R-squared:  0.4091, Adjusted R-squared:  0.4004 
+## F-statistic: 47.24 on 13 and 887 DF,  p-value: &lt; 2.2e-16</code></pre>
+<p>In an experiment, the causal links between the variables and the outcome are cut by the randomizing process. In this experiment the cut was made at the <em>group level</em> however, which may have left causal links at the individual level in tact. Here we merely note the instability of the effect size given the choice of adjustment variables and proceed with the model of the authors.</p>
+</div>
+<div id="effect-of-missing-data" class="section level3">
+<h3>Effect of missing data</h3>
+<p>Next, we want to know what the effect of the imputation is on the estimate of <code>grit</code> in model1.</p>
+<pre class="r"><code>fit_imp_lm &lt;- with(data2_imp, lm(mathscore2 ~  male + raven + csize + belief_survey1 + mathscore1 +grit))
+
+# Pool and summarize regression results
+lm_pooled &lt;- pool(fit_imp_lm)
+summary(lm_pooled, conf.int = TRUE, conf.level = 0.95)</code></pre>
+<pre><code>##               term     estimate   std.error  statistic        df      p.value
+## 1      (Intercept)  0.289362847 0.124973480  2.3153940 151.76531 2.193095e-02
+## 2            male1 -0.007879627 0.046268305 -0.1703029 140.12669 8.650176e-01
+## 3            raven  0.373986917 0.034718433 10.7719989  13.88407 4.002833e-08
+## 4            csize -0.010747931 0.003408281 -3.1534760 116.81258 2.051113e-03
+## 5   belief_survey1  0.011308371 0.023105899  0.4894149 180.63505 6.251418e-01
+## 6       mathscore1  0.281858191 0.026053697 10.8183567 125.65493 0.000000e+00
+## 7 gritintervention  0.251121313 0.050437855  4.9788262  89.66478 3.078342e-06
+##         2.5 %       97.5 %
+## 1  0.04245044  0.536275257
+## 2 -0.09935383  0.083594577
+## 3  0.29946491  0.448508921
+## 4 -0.01749797 -0.003997897
+## 5 -0.03428382  0.056900558
+## 6  0.23029732  0.333419065
+## 7  0.15091261  0.351330020</code></pre>
+<p>We note that the effect of grit has decreases from 0.339 to 0.253, while the standard error barely moved.</p>
+<p>We repeat this procedure for the estimate of <code>grit</code> on the scores on a math test 2.5 years later.</p>
+<pre class="r"><code># Model of mathscore3 with missing data left out
+model5 &lt;- lm(mathscore3 ~  male + raven + csize + belief_survey1 + mathscore1 +grit, data=data2)
+summary(model5)</code></pre>
+<pre><code>## 
+## Call:
+## lm(formula = mathscore3 ~ male + raven + csize + belief_survey1 + 
+##     mathscore1 + grit, data = data2)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -2.40143 -0.56044 -0.06897  0.53427  2.56689 
+## 
+## Coefficients:
+##                   Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)       0.377996   0.184727   2.046  0.04112 *  
+## male1             0.056511   0.062857   0.899  0.36896    
+## raven             0.290866   0.035700   8.148 1.82e-15 ***
+## csize            -0.012171   0.004978  -2.445  0.01475 *  
+## belief_survey1    0.055629   0.032630   1.705  0.08869 .  
+## mathscore1        0.358461   0.035002  10.241  &lt; 2e-16 ***
+## gritintervention  0.212708   0.069642   3.054  0.00235 ** 
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## Residual standard error: 0.8131 on 671 degrees of freedom
+##   (821 observations deleted due to missingness)
+## Multiple R-squared:  0.3377, Adjusted R-squared:  0.3318 
+## F-statistic: 57.03 on 6 and 671 DF,  p-value: &lt; 2.2e-16</code></pre>
+<pre class="r"><code>fit_imp_lm &lt;- with(data2_imp, lm(mathscore3 ~  male + raven + csize + belief_survey1 + mathscore1 +grit))
+
+# Model of mathscore3 with missing data imputed
+lm_pooled &lt;- pool(fit_imp_lm)
+summary(lm_pooled)</code></pre>
+<pre><code>##               term    estimate   std.error  statistic        df      p.value
+## 1      (Intercept)  0.45694905 0.146080034  3.1280732  32.97576 3.665613e-03
+## 2            male1  0.04869399 0.050143628  0.9710902  64.74918 3.351171e-01
+## 3            raven  0.27036177 0.027723220  9.7521778  76.38398 4.662937e-15
+## 4            csize -0.01327866 0.003569623 -3.7199057  89.06549 3.482151e-04
+## 5   belief_survey1  0.02046722 0.025358982  0.8070995  64.57416 4.225721e-01
+## 6       mathscore1  0.31669721 0.030732058 10.3051094  28.78585 3.613332e-11
+## 7 gritintervention  0.13426666 0.049164673  2.7309580 260.45967 6.746394e-03</code></pre>
+<p>The model that uses imputed values estimates the effect to be 0.138, compared to 0.213 for the same model where missing data were simply left out.</p>
+</div>
+<div id="multilevel-bayesian-inference" class="section level3">
+<h3>Multilevel Bayesian inference</h3>
+<p>We now extend the model to include explanations at the group level. To this end we add <span class="math inline">\(\alpha_{[j]i}\)</span>, which can be read as a sequence of indicator variables, one for each of the J schools.</p>
+<p><span class="math display">\[y_{i} \sim N(\alpha_{[j]i}+X_{i}\beta +\sigma_{i}),\ for\ \ i\ = 1, 2,\ ...,\ n \]</span></p>
+<p>The model become multilevel because we set up a model for the indicators at the group level. That is, we model the school indicators as normally distributed, where <span class="math inline">\(\gamma_{1}\)</span> denotes if they were in the treatment group or not. The random assignment took place at the level of the school, so it makes sense to insert the <code>grit</code> variable at this level.</p>
+<p><span class="math display">\[\alpha_{j} \sim N(\gamma_{0}+\gamma_{1}u_{j} +\sigma_{j}),\ for\ \ j\ = 1, 2,\ ...,\ J \]</span></p>
+<pre class="r"><code>brm_school1 &lt;- 
+  brm_multiple(data = data2_imp, 
+      family = gaussian,
+      mathscore2 ~  1 + male + raven + csize + belief_survey1 + mathscore1 + grit + (1 | schoolid),
+      iter = 2000, warmup = 1000, chains = 4, cores = 4,  
+      seed = 4387510, 
+      file = &quot;fits/brm_school1&quot;)
+
+print(brm_school1)</code></pre>
+<pre><code>##  Family: gaussian 
+##   Links: mu = identity; sigma = identity 
+## Formula: mathscore2 ~ 1 + male + raven + csize + belief_survey1 + mathscore1 + grit + (1 | schoolid) 
+##    Data: data2_imp (Number of observations: 1499) 
+## Samples: 20 chains, each with iter = 2000; warmup = 1000; thin = 1;
+##          total post-warmup samples = 20000
+## 
+## Group-Level Effects: 
+## ~schoolid (Number of levels: 16) 
+##               Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+## sd(Intercept)     0.18      0.05     0.10     0.31 1.02     1260     9741
+## 
+## Population-Level Effects: 
+##                  Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+## Intercept            0.11      0.20    -0.29     0.49 1.02      954    14022
+## male1                0.02      0.04    -0.06     0.11 1.02      867    13295
+## raven                0.38      0.03     0.32     0.43 1.10      118      464
+## csize               -0.01      0.01    -0.02     0.00 1.02      807    14678
+## belief_survey1       0.01      0.02    -0.03     0.06 1.16       81      218
+## mathscore1           0.26      0.03     0.21     0.31 1.05      229     2165
+## gritintervention     0.24      0.11     0.02     0.46 1.01     2582    10806
+## 
+## Family Specific Parameters: 
+##       Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+## sigma     0.81      0.02     0.78     0.85 1.21       65      409
+## 
+## Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+## and Tail_ESS are effective sample size measures, and Rhat is the potential
+## scale reduction factor on split chains (at convergence, Rhat = 1).</code></pre>
+<p>We notice that the effect of the grit intervention is now estimated to be 0.24, which is a little smaller than the individual level regression (where a bayesian version not shown here gave the same estimate). Furthermore, the standard deviation of math scores among schools is 0.18, while the variation between students is captured by a standard deviation of 0.81. Hence, there will be a significant pull on the estimate towards the group means.</p>
+<p>Now what’s the fun of having only one level? We also have variation at a level between that of the student and the school, which has been captured in the data set by the variable <code>classid</code>. So let’s add it in.</p>
+<p><span class="math display">\[y_{i} \sim N(\eta_{[k]i}+X_{i}\beta +\sigma_{i}),\ for\ \ i\ = 1, 2,\ ...,\ n \]</span></p>
+<p><span class="math display">\[\eta{j} \sim N(\nu_{k} +\alpha_{[j]k}+\sigma_{k}),\ for\ \ k\ = 1, 2,\ ...,\ K \]</span></p>
+<p><span class="math display">\[\alpha_{j} \sim N(\gamma_{0}+\gamma_{1}u_{j} +\sigma_{j}),\ for\ \ j\ = 1, 2,\ ...,\ J \]</span></p>
+<pre class="r"><code>brm_school_class5 &lt;- 
+  brm_multiple(data = data2_imp, 
+      family = gaussian,
+      mathscore2 ~  1 + male + raven + csize + belief_survey1 + mathscore1 + grit + (1 | schoolid/classid),
+      prior = c(prior(normal(0, 10), class = Intercept),
+                prior(normal(0, 10), class = b),
+                prior(cauchy(0, 10), class = sd),
+                prior(cauchy(0, 10), class = sigma)),
+      iter = 2000, warmup = 1000, chains = 4, cores = 4,  
+      seed = 4387510,
+      control = list(adapt_delta = .95),
+      file = &quot;fits/brm_school_class5&quot;)
+
+print(brm_school_class5)</code></pre>
+<pre><code>##  Family: gaussian 
+##   Links: mu = identity; sigma = identity 
+## Formula: mathscore2 ~ 1 + male + raven + csize + belief_survey1 + mathscore1 + grit + (1 | schoolid/classid) 
+##    Data: data2_imp (Number of observations: 1499) 
+## Samples: 20 chains, each with iter = 2000; warmup = 1000; thin = 1;
+##          total post-warmup samples = 20000
+## 
+## Group-Level Effects: 
+## ~schoolid (Number of levels: 16) 
+##               Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+## sd(Intercept)     0.12      0.07     0.01     0.27 1.01     2694     4826
+## 
+## ~schoolid:classid (Number of levels: 42) 
+##               Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+## sd(Intercept)     0.21      0.04     0.13     0.29 1.04      320     1891
+## 
+## Population-Level Effects: 
+##                  Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+## Intercept            0.23      0.24    -0.25     0.69 1.01     7008    13191
+## male1                0.03      0.04    -0.05     0.11 1.02      826    12972
+## raven                0.35      0.03     0.30     0.41 1.12      105      439
+## csize               -0.01      0.01    -0.02     0.00 1.01     6271    12389
+## belief_survey1       0.02      0.02    -0.03     0.06 1.14       88      251
+## mathscore1           0.25      0.03     0.20     0.30 1.07      178      619
+## gritintervention     0.22      0.11     0.00     0.44 1.01     6795    11280
+## 
+## Family Specific Parameters: 
+##       Estimate Est.Error l-95% CI u-95% CI Rhat Bulk_ESS Tail_ESS
+## sigma     0.80      0.02     0.76     0.83 1.25       57      378
+## 
+## Samples were drawn using sampling(NUTS). For each parameter, Bulk_ESS
+## and Tail_ESS are effective sample size measures, and Rhat is the potential
+## scale reduction factor on split chains (at convergence, Rhat = 1).</code></pre>
+<p>In this final model, in which we took account of variation at the class level as well, the estimate of <code>grit</code> is smaller still at 0.22. As we account for more variation that was not adjusted for by the randomization at the school level, the effect shrinks further still. On the other hand, it does not disappear either, so that there is reason to believe that the intervention was effective.</p>
+</div>
