@@ -21,7 +21,7 @@ projects: []
 
 ```{r load packages and data, include=FALSE}
 
-library(tinytex)
+library(tinytex) 
 library(tidyverse)
 library(readxl)
 library(lme4)
@@ -141,49 +141,33 @@ names(Teach3) <- c("11", "12", "13", "14", "15")
 Group1 <- c("block", "inter")
 names(Group1) <- c("blocked", "interleaved")
 
-# facet_grid cannot cut up the grid, so we do it ourselves
-p1 <- rohrer %>% filter(Teacher <= 5) %>% ggplot(aes(x=total)) +
-  geom_histogram(binwidth=1, color="black", fill="grey") +
-  scale_y_continuous(breaks=seq(0,10,5)) +
-  facet_grid(rows= vars(Group), cols= vars(Teacher), labeller = labeller(Group = Group1, Teacher = Teach1)) +
-  theme_classic() +
-  theme(
-    panel.border = element_rect(colour = "black", fill=NA, size=1),
-    strip.background = element_rect(
-      color="black", fill="white", size=1.5, linetype="solid")) +
-  xlab(NULL) +
-  ylab(NULL)
+# facet_grid cannot cut up the grid, so we write a function to do it ourselves
+# arguments in function: l = left bound, r = right bound, t = teacher names
+teach_graph <- function(l,r,t){
+  rohrer %>% filter(Teacher > l & Teacher <= r) %>% ggplot(aes(x=total)) +
+    geom_histogram(binwidth=1, color="black", fill="grey") +
+    scale_y_continuous(breaks=seq(0,10,5)) +
+    facet_grid(rows= vars(Group), cols= vars(Teacher), labeller = labeller(Group = Group1, Teacher = t)) +
+    theme_classic() +
+    theme(
+      panel.border = element_rect(colour = "black", fill=NA, size=1),
+      strip.background = element_rect(
+        color="black", fill="white", size=1.5, linetype="solid")) +
+    xlab(NULL) +
+    ylab(NULL)
+} 
 
-p2 <- rohrer %>% filter(Teacher > 5 & Teacher <=10) %>% ggplot(aes(x=total)) +
-  geom_histogram(binwidth=1, color="black", fill="grey") +
-  facet_grid(rows= vars(Group), cols= vars(Teacher), labeller = labeller(Group = Group1, Teacher = Teach2)) +
-  scale_y_continuous(breaks=seq(0,6,3)) +
-  theme_classic() +
-  theme(
-    panel.border = element_rect(colour = "black", fill=NA, size=1),
-    strip.background = element_rect(
-      color="black", fill="white", size=1.5, linetype="solid")) +
+# Create three histograms
+p1 <- teach_graph(0,5,Teach1)
+p2 <- teach_graph(5,10,Teach2) +
   ylab("number of students") +
   xlab(NULL)
-
-p3 <- rohrer %>% filter(Teacher > 10) %>% ggplot(aes(x=total)) +
-  geom_histogram(binwidth=1, color="black", fill="grey") +
-  facet_grid(rows= vars(Group), cols= vars(Teacher), labeller = labeller(Group = Group1, Teacher = Teach3)) +
-  scale_y_continuous(breaks=seq(0,10,5)) +
-  theme_classic() +
-  theme(
-    panel.border = element_rect(colour = "black", fill=NA, size=1),
-    strip.background = element_rect(
-      color="black", fill="white", size=1.5, linetype="solid")) +
+p3 <- teach_graph(10,15,Teach3)+
   xlab("points scored") +
   ylab(NULL)
 
 # We use patchwork to glue them together in the order that we desire
-patch1 <- p1/ p2/ p3
-
-patch1 + plot_annotation(
-  title = 'The effect of interleaving per Teacher'
-)
+p1/ p2/ p3
 
 ```
 
@@ -192,31 +176,22 @@ Here the results are more ambiguous. For some teachers we observe the same stark
 So far we have looked at the total score on the surprise test. We now split up the scores in the four topics that were covered. The order matters here. In the `blocked` condition students first completed questions on formulas for proportional relations, solved inequalities in the second block, etc. We notice a clear pattern. 
 
 ```{r}
-# Histogram for the four types of questions
-h1 <- ggplot(rohrer) +
-  geom_histogram(binwidth=1, color="black", fill="grey", aes(y=prop_formula)) +
+# Write a function for making a histogram based on input data
+hist_scores <- function(data){
+  ggplot(rohrer) +
+  geom_histogram(binwidth=1, color="black", fill="grey", aes(y=data)) +
   coord_flip() +
   facet_grid(vars(Group)) +
   theme_classic()
+}
 
-h2 <- ggplot(rohrer) +
-  geom_histogram(binwidth=1, color="black", fill="grey", aes(y=inequality)) +
-  coord_flip() +
-  facet_grid(vars(Group)) +
-  theme_classic()
+# Histograms for the four types of questions
+h1 <- hist_scores(rohrer$prop_formula) + ylab("proportional formulas")
+h2 <- hist_scores(rohrer$inequality) + ylab("solving inequalities")
+h3 <- hist_scores(rohrer$parentheses) + ylab("removing parentheses")
+h4 <- hist_scores(rohrer$circle) + ylab("calculations on circles")
 
-h3 <- ggplot(rohrer) +
-  geom_histogram(binwidth=1, color="black", fill="grey", aes(y=parentheses)) +
-  coord_flip() +
-  facet_grid(vars(Group)) +
-  theme_classic()
-
-h4 <- ggplot(rohrer) +
-  geom_histogram(binwidth=1, color="black", fill="grey", aes(y=circle)) +
-  coord_flip() +
-  facet_grid(vars(Group)) +
-  theme_classic()
-
+# patching them together from left to right in two rows
 patch2 <- (h1+h2) / (h3+h4)
 
 patch2 + plot_annotation(
