@@ -204,7 +204,7 @@ The difference in performance seems to decline for topics that were covered more
 
 If we artificially make the discrete data jump around a little, we can pretend it is continuous and make a scatterplot. We also calculate the means for the two conditions and draw a line between them.
 
-```{r}
+```{r warning= FALSE}
 # Write function for plotting scores per math topic
 scores_topic <- function(topic) {ggplot(rohrer, aes(x=factor(Group))) +
   geom_jitter(aes(y=topic), width=0.05, alpha=0.1) +
@@ -231,7 +231,7 @@ The slope of the lines give us a sense about the rate of increase by interleavin
 
 We also note that the mean for points scored on questions about formulas is living in empty space. With regard to this topic the mean gives a poor summary of what is going on. It would seem that for this topic students either get it or not. We see that the interleaving condition moves students away from the no points group to the 4 points group. This binary nature would suggest that a proportion (of students who got 3 or 4 questions correct) would be a better way to describe and later model the data than the mean. However, for the other questions the mean seems to be a fine summary. And when we add up the points on all topics, we see the points are quite evenly distributed.    
 
-```{r}
+```{r warning = FALSE}
 # input total points scored into the scores_topic function
 scores_topic(rohrer$total) + xlab(NULL) + ylab("points") + 
   ggtitle("points on math test in total")

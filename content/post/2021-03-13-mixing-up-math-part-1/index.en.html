@@ -186,16 +186,13 @@ scores_topic &lt;- function(topic) {ggplot(rohrer, aes(x=factor(Group))) +
 
 # plug in the scores per topic
 s1 &lt;- scores_topic(rohrer$prop_formula) +
-  ylab(&quot;points&quot;) + xlab(NULL) + ggtitle(&quot;formulas&quot;)</code></pre>
-<pre><code>## Warning: `fun.y` is deprecated. Use `fun` instead.</code></pre>
-<pre class="r"><code>s2 &lt;- scores_topic(rohrer$inequality) + xlab(NULL) + ylab(NULL) + ggtitle(&quot;inequalities&quot;)</code></pre>
-<pre><code>## Warning: `fun.y` is deprecated. Use `fun` instead.</code></pre>
-<pre class="r"><code>s3 &lt;- scores_topic(rohrer$parentheses) + 
-  ylab(&quot;points&quot;) +  xlab(NULL) + ggtitle(&quot;parentheses&quot;)</code></pre>
-<pre><code>## Warning: `fun.y` is deprecated. Use `fun` instead.</code></pre>
-<pre class="r"><code>s4 &lt;- scores_topic(rohrer$circle) +  xlab(NULL) + ylab(NULL) + ggtitle(&quot;circles&quot;)</code></pre>
-<pre><code>## Warning: `fun.y` is deprecated. Use `fun` instead.</code></pre>
-<pre class="r"><code># order the graphs
+  ylab(&quot;points&quot;) + xlab(NULL) + ggtitle(&quot;formulas&quot;)
+s2 &lt;- scores_topic(rohrer$inequality) + xlab(NULL) + ylab(NULL) + ggtitle(&quot;inequalities&quot;)
+s3 &lt;- scores_topic(rohrer$parentheses) + 
+  ylab(&quot;points&quot;) +  xlab(NULL) + ggtitle(&quot;parentheses&quot;)
+s4 &lt;- scores_topic(rohrer$circle) +  xlab(NULL) + ylab(NULL) + ggtitle(&quot;circles&quot;)
+
+# order the graphs
 patch3 &lt;- (s1 + s2) / (s3+ s4)
 patch3 + plot_annotation(
   title = &quot;Points scored per math topic&quot;
@@ -206,7 +203,6 @@ patch3 + plot_annotation(
 <pre class="r"><code># input total points scored into the scores_topic function
 scores_topic(rohrer$total) + xlab(NULL) + ylab(&quot;points&quot;) + 
   ggtitle(&quot;points on math test in total&quot;)</code></pre>
-<pre><code>## Warning: `fun.y` is deprecated. Use `fun` instead.</code></pre>
 <p><img src="/post/2021-03-13-mixing-up-math-part-1/index.en_files/figure-html/unnamed-chunk-7-1.png" width="672" /></p>
 <p>We will stick with the mean then when we turn to inference in part 2.</p>
 </div>
