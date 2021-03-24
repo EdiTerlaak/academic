@@ -202,24 +202,39 @@ patch2 + plot_annotation(
 
 The difference in performance seems to decline for topics that were covered more recently in the `blocked` group. This is unsurprising. More interestingly, the `interleaving` group seems to do better even for the questions on circles that were just covered in the blocked group. 
 
-Finally, the last step before we turn to inference is to replicate the finding that Cohen's d is 0.83 for the total score on the test. 
+If we artificially make the discrete data jump around a little, we can pretend it is continuous and make a scatterplot. We also calculate the means for the two conditions and draw a line between them.
 
 ```{r}
-# Calculate the pooled standard deviation in Cohen's d
-n_blocked <- rohrer %>% filter(Group == "blocked") %>% nrow()
-n_interleaved <-  rohrer %>% filter(Group == "interleaved") %>% nrow()
-var_blocked <- rohrer %>% filter(Group == "blocked") %>% pull(total) %>% var()
-var_interleaved <- rohrer %>% filter(Group == "interleaved") %>% pull(total) %>% var()
+# Write function for plotting scores per math topic
+scores_topic <- function(topic) {ggplot(rohrer, aes(x=factor(Group))) +
+  geom_jitter(aes(y=topic), width=0.05, alpha=0.1) +
+  stat_summary(aes(y = topic,group=1), fun.y=mean, colour="red", geom="line",group=1, size=1) +
+  theme_classic()
+}
 
-pooled_sd <- sqrt(
-  ((n_blocked-1)*var_blocked + (n_interleaved - 1)*var_interleaved) /
-    (n_blocked + n_interleaved - 2) 
+# plug in the scores per topic
+s1 <- scores_topic(rohrer$prop_formula) +
+  ylab("points") + xlab(NULL) + ggtitle("formulas")
+s2 <- scores_topic(rohrer$inequality) + xlab(NULL) + ylab(NULL) + ggtitle("inequalities")
+s3 <- scores_topic(rohrer$parentheses) + 
+  ylab("points") +  xlab(NULL) + ggtitle("parentheses")
+s4 <- scores_topic(rohrer$circle) +  xlab(NULL) + ylab(NULL) + ggtitle("circles")
+
+# order the graphs
+patch3 <- (s1 + s2) / (s3+ s4)
+patch3 + plot_annotation(
+  title = "Points scored per math topic"
 )
-
-# Cohen's d
-rohrer %>% summarize(
-  d = (mean(total[Group == "interleaved"])- mean(total[Group == "blocked"]))/pooled_sd)
 ```
 
-This is an impressive effect size. We will check if it holds up in part 2.
+The slope of the lines give us a sense about the rate of increase by interleaving questions and more clearly indicate that the effect of interleaving declines for topics that have been practiced in the blocked group more recently.  
 
+We also note that the mean for points scored on questions about formulas is living in empty space. With regard to this topic the mean gives a poor summary of what is going on. It would seem that for this topic students either get it or not. We see that the interleaving condition moves students away from the no points group to the 4 points group. This binary nature would suggest that a proportion (of students who got 3 or 4 questions correct) would be a better way to describe and later model the data than the mean. However, for the other questions the mean seems to be a fine summary. And when we add up the points on all topics, we see the points are quite evenly distributed.    
+
+```{r}
+# input total points scored into the scores_topic function
+scores_topic(rohrer$total) + xlab(NULL) + ylab("points") + 
+  ggtitle("points on math test in total")
+```
+
+We will stick with the mean then when we turn to inference in part 2. 

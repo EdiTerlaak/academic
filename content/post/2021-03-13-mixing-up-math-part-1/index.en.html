@@ -176,24 +176,37 @@ patch2 + plot_annotation(
 )</code></pre>
 <p><img src="/post/2021-03-13-mixing-up-math-part-1/index.en_files/figure-html/unnamed-chunk-5-1.png" width="672" /></p>
 <p>The difference in performance seems to decline for topics that were covered more recently in the <code>blocked</code> group. This is unsurprising. More interestingly, the <code>interleaving</code> group seems to do better even for the questions on circles that were just covered in the blocked group.</p>
-<p>Finally, the last step before we turn to inference is to replicate the finding that Cohen’s d is 0.83 for the total score on the test.</p>
-<pre class="r"><code># Calculate the pooled standard deviation in Cohen&#39;s d
-n_blocked &lt;- rohrer %&gt;% filter(Group == &quot;blocked&quot;) %&gt;% nrow()
-n_interleaved &lt;-  rohrer %&gt;% filter(Group == &quot;interleaved&quot;) %&gt;% nrow()
-var_blocked &lt;- rohrer %&gt;% filter(Group == &quot;blocked&quot;) %&gt;% pull(total) %&gt;% var()
-var_interleaved &lt;- rohrer %&gt;% filter(Group == &quot;interleaved&quot;) %&gt;% pull(total) %&gt;% var()
+<p>If we artificially make the discrete data jump around a little, we can pretend it is continuous and make a scatterplot. We also calculate the means for the two conditions and draw a line between them.</p>
+<pre class="r"><code># Write function for plotting scores per math topic
+scores_topic &lt;- function(topic) {ggplot(rohrer, aes(x=factor(Group))) +
+  geom_jitter(aes(y=topic), width=0.05, alpha=0.1) +
+  stat_summary(aes(y = topic,group=1), fun.y=mean, colour=&quot;red&quot;, geom=&quot;line&quot;,group=1, size=1) +
+  theme_classic()
+}
 
-pooled_sd &lt;- sqrt(
-  ((n_blocked-1)*var_blocked + (n_interleaved - 1)*var_interleaved) /
-    (n_blocked + n_interleaved - 2) 
-)
-
-# Cohen&#39;s d
-rohrer %&gt;% summarize(
-  d = (mean(total[Group == &quot;interleaved&quot;])- mean(total[Group == &quot;blocked&quot;]))/pooled_sd)</code></pre>
-<pre><code>## # A tibble: 1 x 1
-##       d
-##   &lt;dbl&gt;
-## 1 0.828</code></pre>
-<p>This is an impressive effect size. We will check if it holds up in part 2.</p>
+# plug in the scores per topic
+s1 &lt;- scores_topic(rohrer$prop_formula) +
+  ylab(&quot;points&quot;) + xlab(NULL) + ggtitle(&quot;formulas&quot;)</code></pre>
+<pre><code>## Warning: `fun.y` is deprecated. Use `fun` instead.</code></pre>
+<pre class="r"><code>s2 &lt;- scores_topic(rohrer$inequality) + xlab(NULL) + ylab(NULL) + ggtitle(&quot;inequalities&quot;)</code></pre>
+<pre><code>## Warning: `fun.y` is deprecated. Use `fun` instead.</code></pre>
+<pre class="r"><code>s3 &lt;- scores_topic(rohrer$parentheses) + 
+  ylab(&quot;points&quot;) +  xlab(NULL) + ggtitle(&quot;parentheses&quot;)</code></pre>
+<pre><code>## Warning: `fun.y` is deprecated. Use `fun` instead.</code></pre>
+<pre class="r"><code>s4 &lt;- scores_topic(rohrer$circle) +  xlab(NULL) + ylab(NULL) + ggtitle(&quot;circles&quot;)</code></pre>
+<pre><code>## Warning: `fun.y` is deprecated. Use `fun` instead.</code></pre>
+<pre class="r"><code># order the graphs
+patch3 &lt;- (s1 + s2) / (s3+ s4)
+patch3 + plot_annotation(
+  title = &quot;Points scored per math topic&quot;
+)</code></pre>
+<p><img src="/post/2021-03-13-mixing-up-math-part-1/index.en_files/figure-html/unnamed-chunk-6-1.png" width="672" /></p>
+<p>The slope of the lines give us a sense about the rate of increase by interleaving questions and more clearly indicate that the effect of interleaving declines for topics that have been practiced in the blocked group more recently.</p>
+<p>We also note that the mean for points scored on questions about formulas is living in empty space. With regard to this topic the mean gives a poor summary of what is going on. It would seem that for this topic students either get it or not. We see that the interleaving condition moves students away from the no points group to the 4 points group. This binary nature would suggest that a proportion (of students who got 3 or 4 questions correct) would be a better way to describe and later model the data than the mean. However, for the other questions the mean seems to be a fine summary. And when we add up the points on all topics, we see the points are quite evenly distributed.</p>
+<pre class="r"><code># input total points scored into the scores_topic function
+scores_topic(rohrer$total) + xlab(NULL) + ylab(&quot;points&quot;) + 
+  ggtitle(&quot;points on math test in total&quot;)</code></pre>
+<pre><code>## Warning: `fun.y` is deprecated. Use `fun` instead.</code></pre>
+<p><img src="/post/2021-03-13-mixing-up-math-part-1/index.en_files/figure-html/unnamed-chunk-7-1.png" width="672" /></p>
+<p>We will stick with the mean then when we turn to inference in part 2.</p>
 </div>
