@@ -180,7 +180,7 @@ patch2 + plot_annotation(
 <pre class="r"><code># Write function for plotting scores per math topic
 scores_topic &lt;- function(topic) {ggplot(rohrer, aes(x=factor(Group))) +
   geom_jitter(aes(y=topic), width=0.05, alpha=0.1) +
-  stat_summary(aes(y = topic,group=1), fun.y=mean, colour=&quot;red&quot;, geom=&quot;line&quot;,group=1, size=1) +
+  stat_summary(aes(y = topic,group=1), fun=mean, colour=&quot;red&quot;, geom=&quot;line&quot;,group=1, size=1) +
   theme_classic()
 }
 

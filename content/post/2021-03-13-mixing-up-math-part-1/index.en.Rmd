@@ -208,7 +208,7 @@ If we artificially make the discrete data jump around a little, we can pretend i
 # Write function for plotting scores per math topic
 scores_topic <- function(topic) {ggplot(rohrer, aes(x=factor(Group))) +
   geom_jitter(aes(y=topic), width=0.05, alpha=0.1) +
-  stat_summary(aes(y = topic,group=1), fun.y=mean, colour="red", geom="line",group=1, size=1) +
+  stat_summary(aes(y = topic,group=1), fun=mean, colour="red", geom="line",group=1, size=1) +
   theme_classic()
 }
 

@@ -1,0 +1,317 @@
+---
+title: 'Mixing up Math : effect size and REML (part 2) '
+author: Edi Terlaak
+date: '2021-03-28'
+slug: mixing-up-math-multilevel-models-part-2
+categories:
+  - R
+tags:
+  - Multilevel model
+subtitle: ''
+summary: ''
+authors: []
+lastmod: '2021-03-28T12:16:12+02:00'
+featured: no
+image:
+  caption: ''
+  focal_point: ''
+  preview_only: no
+projects: []
+---
+
+
+
+<p>In a previous post we discussed the design of a field experiment by Doug Rohrer and colleagues, in which math questions were blocked for some classes and mixed for other classes. We also looked at a bunch of graphs that showed the difference in test scores between the two groups. Now we want to put a number on that difference, adjust for confounders and account for uncertainty in the estimate.</p>
+<div id="effect-sizes" class="section level3">
+<h3>Effect Sizes</h3>
+<p>The authors themselves report an effect size of <em>d</em> = 0.83. Let’s find out what this number means.</p>
+<p>First of all, this number is standardized. That is, the difference between the means is divided by some kind of standard deviation. This has two advantages. First, a standardized number is scale free. Hence, we can in principle compare such different quantities of interest as test scores and motivation of students. Second, it makes sense intuitively to say that the difference between the means of two groups is more impressive if there is little variation in the groups. Just as we would not be surprised if the means of two groups are different, if values in the groups are all over the place.</p>
+<p>Unfortunately, there is a downside as well. When we express the difference between averages in two groups in terms of the variation in these groups, we assume that the variation is constant from sample to sample. In general, you want to benchmark on something that is stable. If the sample contains more or less variation than the population for some reason, we will respectively underestimate or overestimate the effect size. More on this later.</p>
+<p>The particular effect size reported in Rohrer’s study was proposed by Jacob Cohen and is widely used. We will look at the calculation of Cohen’s <em>d</em> in more detail later. Here we care about when we should call an effect size large or small, which doesn’t depend so much on the particular way in which the standard deviation is calculated. Cohen proposed his own rules of thumb in 1962, which he refined in 1969. He considered</p>
+<ul>
+<li><em>d</em> &lt; 0.2 as small</li>
+<li>0.2 &lt; <em>d</em> &lt; 0.5 as medium</li>
+<li><em>d</em> &gt; 0.8 as large.</li>
+</ul>
+<p>Based on these guidelines, Rohrer’s <em>d</em> = 0.83 is already impressive. It becomes even more so when we compare his result with other recent educational interventions in schools.</p>
+<p>Early research in education did find effect sizes that matched Cohen’s rules of thumb. Bloom’s famous study on tutoring for example showed an effect size of about 2. He henceforth famously set a challenge to educational researchers of solving the ‘two sigma problem’, which is to reach such an effect in a classroom setting. However, as studies became more rigorous, effect sizes dropped dramatically. When the effect of one year of tutoring is measured on state-wide math tests for example, the effect size is at most 0.25. The same goes for educational field experiments across the board. A recent meta-analysis based on 197 randomized controlled trials (RCTs) finds on average effect size of 0.16 on academic achievement, while an analysis based on 105 RCTs in schools that tested for the effect on math scores found an average effect size of only 0.05. See <a href="https://scholar.harvard.edu/files/mkraft/files/kraft_2018_interpreting_effect_sizes.pdf">this paper</a> for an overview of these results.</p>
+<p>An effect size of 0.83 is suspiciously high then. According to <a href="https://scholar.harvard.edu/files/mkraft/files/kraft_2018_interpreting_effect_sizes.pdf">this ranking by Kraft</a> of almost 500 effect sizes in educational interventions for achievement outcomes, it would be around the 98th percentile of studies! Based on this ranking, Kraft proposes the following rules of thumb for educational field experiments that measure student performance.</p>
+<ul>
+<li>effect size &lt; 0.05 is small</li>
+<li>0.05 &lt; effect size &lt; 0.2 is medium</li>
+<li>effect size &gt; 0.2 is large</li>
+</ul>
+<p>Rohrer’s effect size of <em>d</em> = 0.83 is four times the size of what would be considered a large effect! How do we explain this?</p>
+<p>It could be that mixing math questions is a revolutionary concept that will change the field of math education. It is more likely though that the results are inflated. In general, effect sizes tend to be inflated when</p>
+<ol style="list-style-type: decimal">
+<li>they are measured on a test that was made by researchers (rather than a standardized one)</li>
+<li>when the intervention is short term</li>
+<li>when a subgroup is sampled that is more likely to benefit from the intervention.</li>
+</ol>
+<p>This study meets the first two criteria. It may not meet the third, since we do not know which subgroups benefit more from mixing. However, schools with performance problems were excluded from the sample, so that the students in the study are more homogeneous. That means in turn that the standard deviation in the sample is smaller. And dividing by a smaller denominator increases the effect size. We will come back to these points when we have estimated the effect size more precisely.</p>
+<p>Another complication is that there is not one measure of an effect size. That is, we can calculate the standard deviations in an effect size formula in several ways. For Cohen’s <em>d</em> we pool the standard deviations of the control and intervention groups. The steps are in the code below, where we replicate the number that Rohrer found.</p>
+<pre class="r"><code># calculate the number of students in the blocked and interleaving groups
+n_blocked &lt;- rohrer %&gt;% filter(Group == &quot;blocked&quot;) %&gt;% nrow()
+n_interleaved &lt;-  rohrer %&gt;% filter(Group == &quot;interleaved&quot;) %&gt;% nrow()
+
+# Calculate the variance in both groups
+var_blocked &lt;- rohrer %&gt;% filter(Group == &quot;blocked&quot;) %&gt;% pull(total) %&gt;% var()
+var_interleaved &lt;- rohrer %&gt;% filter(Group == &quot;interleaved&quot;) %&gt;% pull(total) %&gt;% var()
+
+# pool the variances weighted by the groups size and take the square root
+pooled_sd &lt;- sqrt(
+  ((n_blocked-1)*var_blocked + (n_interleaved - 1)*var_interleaved) /
+    (n_blocked + n_interleaved - 2) 
+)
+
+# Now calculate Cohen&#39;s d
+rohrer %&gt;% summarize(
+  d = (mean(total[Group == &quot;interleaved&quot;])- mean(total[Group == &quot;blocked&quot;]))/pooled_sd, digits =6)</code></pre>
+<pre><code>## # A tibble: 1 x 2
+##       d digits
+##   &lt;dbl&gt;  &lt;dbl&gt;
+## 1 0.828      6</code></pre>
+<p>Alternatively, one can use the standard deviation from the control group or the standard deviation from the population on the same measure (which is rarely known). The choice is all about the relevant benchmark for the researcher. You want to express the size of on effect in terms of the variability. But do you care about the variability that exists in schools right now or the one in schools in a world where the treatment is implemented? For comparability of research, it would seems better - absent population measures - if variability in the control group were used (if it is representative of the population). That would mean that we are all talking about the same - status quo - world.</p>
+<p>The method of standardization can matter a little bit, as can be seen below for the data set under study where the standard deviations between groups are indeed different.</p>
+<pre class="r"><code>rohrer %&gt;% group_by(Group) %&gt;% summarize(sd = sd(total))</code></pre>
+<pre><code>## # A tibble: 2 x 2
+##   Group          sd
+##   &lt;fct&gt;       &lt;dbl&gt;
+## 1 blocked      4.36
+## 2 interleaved  4.58</code></pre>
+<p>Because we should standardize on the control group, the effect size will increase further still, as is demonstrated below.</p>
+<pre class="r"><code># effect size based on sd of control group
+mean_0 &lt;- mean(rohrer$total[rohrer$Group == &quot;blocked&quot;])
+mean_1 &lt;- mean(rohrer$total[rohrer$Group == &quot;interleaved&quot;])
+sd_blocked &lt;- sd(rohrer$total[rohrer$Group == &quot;blocked&quot;])
+(mean_1 - mean_0)/sd_blocked</code></pre>
+<pre><code>## [1] 0.8490186</code></pre>
+<p>In the current analysis we will estimate the effect size in a regression model. With a binary explanatory variable, it will simply calculate the means for the two groups. When we standardize the outcome measure based on the standard deviation of the control group, we get the same effect size as above.</p>
+<pre class="r"><code># standardize scores by the sd of control group
+rohrer &lt;- rohrer %&gt;% mutate(stand_total = (total - mean(total))/sd(total[Group == &quot;blocked&quot;]))
+
+# Run an lm on these standardized scores
+summary(lm(stand_total ~ Group, data=rohrer))</code></pre>
+<pre><code>## 
+## Call:
+## lm(formula = stand_total ~ Group, data = rohrer)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -2.22694 -0.85138 -0.00236  0.91469  2.29025 
+## 
+## Coefficients:
+##                  Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)      -0.42936    0.05201  -8.256 6.39e-16 ***
+## Groupinterleaved  0.84902    0.07314  11.609  &lt; 2e-16 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## Residual standard error: 1.026 on 785 degrees of freedom
+## Multiple R-squared:  0.1465, Adjusted R-squared:  0.1454 
+## F-statistic: 134.8 on 1 and 785 DF,  p-value: &lt; 2.2e-16</code></pre>
+</div>
+<div id="multilevel-likelihood-models" class="section level3">
+<h3>Multilevel Likelihood Models</h3>
+<p>We noted in the previous post that the Rohrer study randomized classes and not students. Hence, even though there were 787 students in the study, only 54 classes were randomized. This leaves some room for confounders to pull the strings. Unfortunately, the public dataset contains no information besides the class, the school and the teacher. We work with the data we have though and not with the data we might want. So we first want to get an idea of the influence of schools on the test scores.</p>
+<p>The most straightforward way to do so is to include a bunch of indicators in the model like so.</p>
+<pre class="r"><code>M_classical_School &lt;- lm(stand_total ~ - 1 +  factor(School) + Group, data = rohrer)
+summary(M_classical_School)</code></pre>
+<pre><code>## 
+## Call:
+## lm(formula = stand_total ~ -1 + factor(School) + Group, data = rohrer)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -2.43270 -0.86875  0.00649  0.77696  2.29910 
+## 
+## Coefficients:
+##                  Estimate Std. Error t value Pr(&gt;|t|)    
+## factor(School)A  -0.21863    0.08807  -2.482   0.0133 *  
+## factor(School)B  -0.59454    0.10310  -5.766 1.17e-08 ***
+## factor(School)C  -0.64642    0.12150  -5.320 1.35e-07 ***
+## factor(School)D  -0.43821    0.08098  -5.412 8.32e-08 ***
+## factor(School)E  -0.40700    0.07795  -5.221 2.28e-07 ***
+## Groupinterleaved  0.84404    0.07331  11.513  &lt; 2e-16 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## Residual standard error: 1.02 on 781 degrees of freedom
+## Multiple R-squared:  0.1606, Adjusted R-squared:  0.1541 
+## F-statistic:  24.9 on 6 and 781 DF,  p-value: &lt; 2.2e-16</code></pre>
+<p>A shortcoming with this model is that it learns nothing as it moves from school to school. Having information on the results in one school should tell us something about what to expect in the next school. But this model totally forgets about the results in school A when it moves to school B. To remedy this shortcoming, we can set up a normal distribution for the school averages. At its center is the average of the school means, while its spread it controlled by the standard deviation that the model also learns from the data. The principled way to calculate the compromise between the group mean of school A and the average of all school means is to build a Bayesian model. Here we will approximate the Bayesian approach in a likelihood framework. The formula for the compromise between a school mean and the average of all the schools is</p>
+<p><span class="math display">\[\hat{\alpha}_{j}\approx\frac{\frac{n_{j}}{\sigma_{y}^2}\bar{y}_{j}+\frac{1}{\sigma_{\alpha}^2}\bar{y}_{all}}{\frac{n_{j}}{\sigma_{y}^2}+\frac{1}{\sigma_{\alpha}^2}}\]</span></p>
+<p>where <span class="math inline">\(\hat{\alpha}_{j}\)</span> is the estimate of the mean of a school, <span class="math inline">\(\bar{y}_{j}\)</span> is the empirical mean score in school j and <span class="math inline">\(\bar{y}_{all}\)</span> is the mean score of all schools pooled together. Furthermore <span class="math inline">\(\sigma_{y}^2\)</span> is the variance in school j, <span class="math inline">\(\sigma_{\alpha}^2\)</span> is the variance between the school means and <span class="math inline">\(n_{j}\)</span> is the number of students in school j.</p>
+<p>We can see from the formula that the overall and group means are weighted by their variance and for the group means also the number of observations. The group mean will carry more weight if there are more observations within the group, so <span class="math inline">\(n_{j}\)</span> is large, and if the variance within the group <span class="math inline">\(\sigma_{y}^2\)</span> is small. The overall mean counts for one observation but can still carry a lot of weight if the variance between the groups (here: the schools) <span class="math inline">\(\sigma_{\alpha}^2\)</span> is small. We will come back to this later.</p>
+<p>When group level parameters are modeled, the overall model is called multilevel. Let’s write up a formula for the test score of an individual student <span class="math inline">\(y_{i}\)</span></p>
+<p><span class="math display">\[y_{i} \sim N(\alpha_{[j]i} +\sigma_{i}),\ for\ \ i\ = 1, 2,\ ...,\ n \]</span></p>
+<p>In this simple model, the scores of a student depend on the group mean for a school. As we’ve seen, these means are given a distribution of their own.</p>
+<p><span class="math display">\[\alpha_{j} \sim N(\gamma_{0} +\sigma_{j}),\ for\ \ j\ = 1, 2,\ ...,\ J \]</span></p>
+<p>Now for some terminology. Because the group means are given a probability model, they are sometimes called random effects. Individual level variables without such a model are then called fixed effects. Unfortunately, there are multiple interpretations of random and fixed effects, which are listed in <a href="http://www.stat.columbia.edu/~gelman/arm/">Gelman &amp; Hill (2007, p. 245)</a>. These authors therefore prefer to speak of modeled (random) and unmodeled (fixed) effects.</p>
+<p>Below we will use the lme4 package to build multilevel models. This package does not calculate the maximum likelihood (ML), but the restricted maximum likelihood (REML). This is because there is a small bias in ML estimates of the variance, such that the true variance in the population is underestimated. Normally, this is not a big deal. However, multilevel models can have many variables, which make it a noticable problem. REML removes the bias by estimating the variance without using the sample mean. For details, see <a href="https://towardsdatascience.com/maximum-likelihood-ml-vs-reml-78cf79bef2cf">this post</a>.</p>
+<p>Let’s run the model which predicts scores by schools.</p>
+<pre class="r"><code>M0 &lt;- lmer(stand_total ~ 1 + (1 | School), data = rohrer)
+summary(M0)</code></pre>
+<pre><code>## Linear mixed model fit by REML [&#39;lmerMod&#39;]
+## Formula: stand_total ~ 1 + (1 | School)
+##    Data: rohrer
+## 
+## REML criterion at convergence: 2396.2
+## 
+## Scaled residuals: 
+##      Min       1Q   Median       3Q      Max 
+## -1.74902 -0.82574 -0.01473  0.81705  1.85308 
+## 
+## Random effects:
+##  Groups   Name        Variance Std.Dev.
+##  School   (Intercept) 0.02554  0.1598  
+##  Residual             1.21554  1.1025  
+## Number of obs: 787, groups:  School, 5
+## 
+## Fixed effects:
+##             Estimate Std. Error t value
+## (Intercept) -0.03537    0.08282  -0.427</code></pre>
+<p>We note that the variance between the groups (schools) is 0.02554, while the variance is 1.21554 within the schools. This means that 0.02554/(0.02554 + 1.21554) = 0.0205789 or 2% of total variance in scores is between the schools. This number is called the <em>intraclass correlation</em>. This is to say that schools do not play a notable role in accounting for the variation in test scores and are dropped from the analysis.</p>
+<p>Another way to look at this is to realize how many observations would be needed to pull our estimate of a school average in the direction of the empirical school average (and so away from the pooled average). From the formula for <span class="math inline">\(\hat{\alpha}_{j}\)</span> we can show with some elementary algebra that for the group mean to have the same weight as the pooled mean, the number of observations per school would have to be <span class="math inline">\(\frac{\sigma_{y}^2}{\sigma_{\alpha}^2}\)</span> = 48. In this study this number is actually easily reached per school. It’s just that the means are so close together that there would be barely any movement anyway.</p>
+<p>Let’s see next what the effect of being in a certain class is, after some data wrangling.</p>
+<pre class="r"><code># create unique classes, because they are numbered per teacher
+rohrer_class &lt;- rohrer %&gt;% mutate(Class = as.character(Class),
+                            Teacher = as.character(Teacher),
+                            class_unique = paste(Teacher, Class, sep = &#39;_&#39;) )
+
+# Null model with only unique classes
+M1.0 &lt;- lmer(stand_total ~ 1  + (1 | class_unique), data = rohrer_class)
+summary(M1.0)</code></pre>
+<pre><code>## Linear mixed model fit by REML [&#39;lmerMod&#39;]
+## Formula: stand_total ~ 1 + (1 | class_unique)
+##    Data: rohrer_class
+## 
+## REML criterion at convergence: 2270.1
+## 
+## Scaled residuals: 
+##      Min       1Q   Median       3Q      Max 
+## -2.50897 -0.81021  0.00924  0.72336  2.43127 
+## 
+## Random effects:
+##  Groups       Name        Variance Std.Dev.
+##  class_unique (Intercept) 0.2781   0.5274  
+##  Residual                 0.9340   0.9664  
+## Number of obs: 787, groups:  class_unique, 54
+## 
+## Fixed effects:
+##             Estimate Std. Error t value
+## (Intercept) 0.007732   0.080522   0.096</code></pre>
+<p>The variance between classes is a meaty 0.2781 compared to 0.9340 for the variance between individuals within classes. The icc is 23%. This is as expected, because the intervention was carried out at the class level.</p>
+<p>Let us now add the interleaving intervention variable <code>Group</code> and calculate the icc with a helpful function.</p>
+<pre class="r"><code>M1.1 &lt;- lmer(stand_total ~ 1  + Group + (1 | class_unique), data = rohrer_class)
+summary(M1.1)</code></pre>
+<pre><code>## Linear mixed model fit by REML [&#39;lmerMod&#39;]
+## Formula: stand_total ~ 1 + Group + (1 | class_unique)
+##    Data: rohrer_class
+## 
+## REML criterion at convergence: 2239.4
+## 
+## Scaled residuals: 
+##      Min       1Q   Median       3Q      Max 
+## -2.52610 -0.81260 -0.00138  0.74695  2.47127 
+## 
+## Random effects:
+##  Groups       Name        Variance Std.Dev.
+##  class_unique (Intercept) 0.1203   0.3469  
+##  Residual                 0.9338   0.9663  
+## Number of obs: 787, groups:  class_unique, 54
+## 
+## Fixed effects:
+##                  Estimate Std. Error t value
+## (Intercept)      -0.40626    0.08487  -4.787
+## Groupinterleaved  0.80549    0.11869   6.786
+## 
+## Correlation of Fixed Effects:
+##             (Intr)
+## Groupntrlvd -0.715</code></pre>
+<pre class="r"><code>icc(M1.1)</code></pre>
+<pre><code>## # Intraclass Correlation Coefficient
+## 
+##      Adjusted ICC: 0.114
+##   Conditional ICC: 0.099</code></pre>
+<p>After accounting for the intervention, the variation that is between individuals did not change, which is as expected. But the variation between classes dropped steeply. The icc is now only 11%. So a lot of the variation between classes seems to have been due to whether math questions are blocked or interleaved. The effect of the intervention is now estimated at 0.81.</p>
+<p>Finally, we can take the effect of teachers into account. Teachers were evenly distributed over the interleaving and blocking groups. The teacher you have still matters though. We will demonstrate this by looking at the estimates per teacher.</p>
+<pre class="r"><code>M2.0 &lt;- lmer(stand_total ~ 1 + (1 | Teacher), data = rohrer_class)
+summary(M2.0)</code></pre>
+<pre><code>## Linear mixed model fit by REML [&#39;lmerMod&#39;]
+## Formula: stand_total ~ 1 + (1 | Teacher)
+##    Data: rohrer_class
+## 
+## REML criterion at convergence: 2356.2
+## 
+## Scaled residuals: 
+##      Min       1Q   Median       3Q      Max 
+## -2.17538 -0.82359 -0.01632  0.80243  2.07040 
+## 
+## Random effects:
+##  Groups   Name        Variance Std.Dev.
+##  Teacher  (Intercept) 0.1101   0.3318  
+##  Residual             1.1275   1.0619  
+## Number of obs: 787, groups:  Teacher, 15
+## 
+## Fixed effects:
+##             Estimate Std. Error t value
+## (Intercept) -0.04339    0.09461  -0.459</code></pre>
+<pre class="r"><code>coef(M2.0)</code></pre>
+<pre><code>## $Teacher
+##    (Intercept)
+## 1  -0.50271458
+## 10 -0.10630178
+## 11  0.29493925
+## 12 -0.15986159
+## 13  0.32104000
+## 14  0.10610849
+## 15 -0.40164513
+## 2   0.50264916
+## 3   0.34828915
+## 4  -0.33757625
+## 5  -0.07521220
+## 6  -0.22966996
+## 7  -0.28442536
+## 8  -0.11069583
+## 9  -0.01570455
+## 
+## attr(,&quot;class&quot;)
+## [1] &quot;coef.mer&quot;</code></pre>
+<p>The estimated difference between having one teacher or another can be as much as 1 standard deviations, for these questions in this study.</p>
+<p>Finally, we account for both teacher and class effects and see what the estimated effect of the intervention is. We nest classes within teachers, since teachers are the overarching group.</p>
+<pre class="r"><code>M2.1 &lt;- lmer(stand_total ~ 1  + Group + (1 | Teacher / class_unique), data = rohrer_class)
+summary(M2.1)</code></pre>
+<pre><code>## Linear mixed model fit by REML [&#39;lmerMod&#39;]
+## Formula: stand_total ~ 1 + Group + (1 | Teacher/class_unique)
+##    Data: rohrer_class
+## 
+## REML criterion at convergence: 2228.2
+## 
+## Scaled residuals: 
+##      Min       1Q   Median       3Q      Max 
+## -2.61403 -0.79203  0.00732  0.72930  2.38186 
+## 
+## Random effects:
+##  Groups               Name        Variance Std.Dev.
+##  class_unique:Teacher (Intercept) 0.04023  0.2006  
+##  Teacher              (Intercept) 0.08328  0.2886  
+##  Residual                         0.93301  0.9659  
+## Number of obs: 787, groups:  class_unique:Teacher, 54; Teacher, 15
+## 
+## Fixed effects:
+##                  Estimate Std. Error t value
+## (Intercept)      -0.44020    0.09886  -4.453
+## Groupinterleaved  0.81613    0.09003   9.065
+## 
+## Correlation of Fixed Effects:
+##             (Intr)
+## Groupntrlvd -0.459</code></pre>
+<p>Again, there is no effect on the variance between individuals, but accounting for the effect of teachers slightly increased the estimated effect of the intervention. Even though the standard error is small, these shifts are minor in comparison.</p>
+</div>
+<div id="conclusion" class="section level3">
+<h3>Conclusion</h3>
+<p>The estimated effect size of mixing math for these Florida students seems fairly robust at a little above 0.8. We should note that we could not adjust for possible confounders, because they were either not measured or not published. Following the discussion of effect sizes, some inflation is likely, since the researchers used self made test questions, carried out an intervention for ‘only’ three months and may have studied a fairly homogeneous sample of students. This is not a critique of the study. It only means that results are hard to compare with similar studies.</p>
+<p>On the positive side, the study investigated the effect of practicing math on medium term learning in a clean way, in that the test was a surprise test. What students knew was therefore not the result of cramming but the residual of effort. In this respect the validity of the study if very high. We should not care about the performance on standardized tests for which students filled up their short term memory, but about what sticks after practice, hopefully in long term memory.</p>
+<p>Despite the caveats, the results of the Rohrer study are fascinating. They would be even more impressive if we knew how strong the effect is compared to similar interventions. To that end they may have to be studied for an entire school year, on a standardized test and for a heterogeneous sample of students.</p>
+</div>
