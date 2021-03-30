@@ -57,9 +57,9 @@ Unfortunately, there is a downside as well. When we express the difference betwe
 
 The particular effect size reported in Rohrer's study was proposed by Jacob Cohen and is widely used. We will look at the calculation of Cohen's *d* in more detail later. Here we care about when we should call an effect size large or small, which doesn't depend so much on the particular way in which the standard deviation is calculated. Cohen proposed his own rules of thumb in 1962, which he refined in 1969. He considered 
 
-* *d* < 0.2 as small 
-* 0.2 < *d* < 0.5 as medium 
-* *d* > 0.8 as large. 
+* *d* = 0.2 is small 
+* *d* = 0.5 is medium 
+* *d* = 0.8 is large. 
 
 Based on these guidelines, Rohrer's *d* = 0.83 is already impressive. It becomes even more so when we compare his result with other recent educational interventions in schools.  
 
