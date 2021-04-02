@@ -35,13 +35,14 @@ According to a number of psychologists, we've been teaching math the wrong way. 
 ### Research Design
 The study consists of a so called field experiment. That means that the study was not performed under controlled conditions in a university room, but in an everyday setting - in this case at several schools in Florida. One group of seventh grade kids received interleaved practice questions, while the other group received blocked practice questions. The questions were the same for both groups, so that only the ordering differed between them. After practicing for about three months, the same surprise test was taken by all students.
 
-In order to clearly identify what the critical issues with the study design are, we introduce some standard notation on causality. An annoying but fundamental fact for the purpose of an analysis of causality is that we only ever observe one outcome of an event. If we are dealing with a suspected cause that we call treatment $T_{i}$, then for individual $i$ we may only observe $Y_{i}(1)$ and not $Y_{i}(0)$. That is, for person $i$ we may only observe the effect of $T_{i}=1$ at any one point in time. We could measure the outcome at a later point in time, where we could make sure that $T_{i}=0$, but then not all the conditions will be *exactly* the same. So we can never solve the fundamental problem of what would have happened if things would have been different.
+In order to clearly identify what the critical issues with the study design are, we introduce some standard notation on causality. An annoying but fundamental fact for the purpose of an analysis of causality is that we only ever observe one outcome of an event. If we are dealing with a suspected cause that we call treatment $T_{i}$, then for individual $i$ we may only observe $Y_{i}(1)$ and not $Y_{i}(0)$. That is, for person $i$ we may only observe the effect of $T_{i}=1$ at any one point in time. We could measure the outcome at a later point in time, where we could make sure that $T_{i}=0$, but then not all the conditions will be *exactly* the same. So we can never solve the fundamental problem of what would have happened if things would have been different. 
 
 At this point one can either give up, or carry on pragmatically and take the average of many responses to $T_{i}=1$ and $T_{i}=0$. This give us the average treatment effect that we will here simply write as $Y(1)-Y(0)$. 
 
 This approach leaves us with two problems. 
 
 1. There are confounders. These variables are causes that hide in the treatment group and make us falsely think that the treatment is the cause. Confounders can either be observed or unobserved. We write the observed confounders as $X$ and the unobserved as $U$. With this notation in hand we can now repeat ourselves by saying that if the treatment $T_{i}=1$ goes together with $X$ or $U$, we can mistakenly conclude that $T$ is doing the causal work. 
+
 
 2. Even if we established that there is a cause in a sample, we are unsure if it exists in the population.
 
