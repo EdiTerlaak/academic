@@ -1,0 +1,300 @@
+---
+title: Math, Grit and Matching (part 4)
+author: Edi Terlaak
+date: '2021-03-31'
+slug: math-grit-and-matching-part-4
+categories:
+  - R
+tags:
+subtitle: ''
+summary: ''
+authors: []
+lastmod: '2021-03-31T15:59:35+02:00'
+featured: no
+image:
+  caption: ''
+  focal_point: ''
+  preview_only: no
+projects: []
+---
+
+
+
+<p>We return once again to the study that investigated the effect of a grit intervention on math scores. Even though the study was an experiment with thousands of participants, it couldn’t shake off the threat of lurking confounders because the treatment was randomly assigned at the school level. We tried to adjust for confounders using classical and multilevel regression, which decreased the estimated effect by quite a bit. However, by doing so we introduced the possibility of model dependence.</p>
+<p>In the first section it is explained what model dependence is. Next, we discuss remedies, which consist of regularization and matching methods. Finally, I carry out a preferred matching method and see what happens to the estimated effect size.</p>
+<div id="model-dependence" class="section level2">
+<h2>Model dependence</h2>
+<p>The standard practice of model fitting goes something like this. Fit a line through the data. If it doesn’t match closely, transform the data or fit some kind of curve that follows the data more closely. Then look at the distance of the errors from the curve and possibly change the distribution that models the spread of the errors. This procedure seems reasonable. However, apart from the risk of overfitting, there is a lot of freedom for researchers to choose a model that inflates the desired result.</p>
+<p>Similarly, researchers choose whether to include variables or not in their models. In fact, we saw in part 2 that the exclusion of variables had a sizable effect on the estimation of the effect of <code>grit</code>. The result is, in other words, not robust to variable selection.</p>
+<p>These phenomena are referred to as ‘model dependance’, which arises from ‘researcher degrees of freedom’ (in choosing variables and choosing a model). The danger of inflating results is not imaginary, given that even the social science results published in the best journals <a href="https://www.nature.com/articles/s41562-018-0399-z">often fail to replicate</a>.</p>
+<p>If one wanted to show the amount of model dependence, one would have to run hundreds of thousands of models, including all the combinations of selected variables, interactions, squared terms, etc. We will not do that here (but see <a href="https://gking.harvard.edu/files/abs/counterf-abs.shtml">this paper</a> for an interesting approach). As we already noted significant model dependence in part 2 of this series, we focus on ways to reduce model dependance.</p>
+<p>In the next section we try to reduce researcher influence on variable selection. We then, in the final section, use matching methods in which we prune data points until we are left with closely matched pairs of subjects that are in the treatment and control groups.</p>
+<div id="ridge-and-lasso-regression" class="section level3">
+<h3>Ridge and Lasso regression</h3>
+<p>Our goal in this section is to minimize the influence of the researcher on variable selection by letting a penalized regression algorithm choose them for us. Just as in ordinary least squares regression, in penalized regression coefficients are optimized with regard to minimizing the squared distance of the predicted values to the outcome. However, a term is added to the optimization formula that penalizes the addition of coefficients. The result is that coefficients have to do more explanatory work to make it into the model. The promise of penalized regression for us is that it can tell us which variables make it to the next phase of the analysis.</p>
+<p>There are two important ways in which the penalty term can be evaluated. To understand this, we must be a little bit more precise in our mathematical terminology. In order to minimize something we need a norm that gives us measuring tools for saying how big the thing is that we are minimizing. The L2 norm tells us to square the absolute difference between two vectors (the outcomes y and the predictions based on the vectors of coefficients multiplied by the data matrix). The choice of for L2 norm results in ridge regression. See the formula below.
+<img src="Ridge_norm.png" />
+The value of lambda is chosen by cross validation. In this method the data set is split into a training set and a test set. After building the model based on the training data, it is evaluated on the test data set, which it has not seen before. Specifically, we run the model for lots of values of lambda in a reasonable interval and choose the one that minimizes the error in a test data set.</p>
+<p>If we do not square the coefficient term and just take its absolute value, we are using an L1 norm. It results in lasso regression. For more on norms, see <a href="https://www.youtube.com/watch?v=NcPUI7aPFhA&amp;list=PLUl4u3cNGP63oMNUHXqIUcrkS2PivhN3k&amp;index=10">this lecture</a>.
+<img src="Lasso_norm.png" />
+Lasso more aggressively eliminates coefficients.</p>
+<p>Both Lasso and Ridge regression are equivalent to a Bayesian regression with a harsh prior. This point of view is much more elegant, but I will stick with the regular interpretation here. Read more on the Bayesian point of view on Lasso and Ridge regression <a href="https://bjlkeng.github.io/posts/probabilistic-interpretation-of-regularization/">here</a>.</p>
+<p>So let us apply these methods to out data set. Although we want to minimize the influence of the researcher, we hand pick only those variables that were measured before the outcome (<code>mathscore2</code>) was measured. Otherwise the results of the model are not sensible. We also scale variables that were not scaled already, so that they are weighted equally by the penalty term lambda.</p>
+<pre class="r"><code>grit &lt;- bind_rows(sample1,sample2) %&gt;% 
+        filter(inconsistent==&#39;0&#39;) %&gt;% 
+        select(raven,wealth,risk,success,age,male, task_ability, grit_survey1,belief_survey1,
+        verbalscore1,mathscore1,mathscore2,csize,grit,classid,schoolid,sample) %&gt;% 
+        mutate_at(c(&quot;success&quot;, &quot;wealth&quot;, &quot;risk&quot;, &quot;csize&quot;, &quot;age&quot;, &quot;task_ability&quot;), ~(scale(.) %&gt;% as.vector)) %&gt;% 
+        as.data.frame()  </code></pre>
+<p>We impute values using the <code>mice</code> package and choose the standard imputation method, which is (Bayesian) predictive mean matching or ‘pmm’. For details on the six steps in this method see <a href="https://statisticsglobe.com/predictive-mean-matching-imputation-method/">this post</a>. We do a sanity check by plotting imputed values in magenta.</p>
+<pre class="r"><code># imputation with mice
+grit_both_imp &lt;- mice(grit, m = 1, method=&quot;pmm&quot;)</code></pre>
+<pre><code>## 
+##  iter imp variable
+##   1   1  raven  wealth  risk  success  age  male  task_ability  grit_survey1  belief_survey1  verbalscore1  mathscore1  mathscore2
+##   2   1  raven  wealth  risk  success  age  male  task_ability  grit_survey1  belief_survey1  verbalscore1  mathscore1  mathscore2
+##   3   1  raven  wealth  risk  success  age  male  task_ability  grit_survey1  belief_survey1  verbalscore1  mathscore1  mathscore2
+##   4   1  raven  wealth  risk  success  age  male  task_ability  grit_survey1  belief_survey1  verbalscore1  mathscore1  mathscore2
+##   5   1  raven  wealth  risk  success  age  male  task_ability  grit_survey1  belief_survey1  verbalscore1  mathscore1  mathscore2</code></pre>
+<pre class="r"><code># use first imputed data set only (here we only created one) 
+grit_imp_1 &lt;- complete(grit_both_imp, 1)
+
+# imputed is magenta
+densityplot(grit_both_imp)</code></pre>
+<p><img src="/post/2021-03-31-math-grit-and-matching-part-4/index.en_files/figure-html/unnamed-chunk-3-1.png" width="672" /></p>
+<p>The imputation seems reasonable.</p>
+<p>To avoid fitting the model to the sample and not the data generating process, we cross validate. We let the cv.glmnet function from the <code>glmnet</code> package do this 10 times for us and plot the result.</p>
+<pre class="r"><code># store the outcome and predictive variables separately
+y &lt;- as.data.frame(grit_imp_1) %&gt;% select(mathscore2) %&gt;% as.matrix()
+X &lt;- as.data.frame(grit_imp_1) %&gt;% select(-mathscore2) %&gt;% as.matrix()
+
+# create a vector of lambda&#39;s to test
+lambdas_to_try &lt;- 10^seq(-4, 3, length.out = 100)
+
+# Setting alpha to 0 results in ridge regression; we set standardize to FALSE because we already have done so
+ridge_cv &lt;- cv.glmnet(X, y, alpha = 0, lambda = lambdas_to_try,
+                      standardize = FALSE, nfolds = 10)
+# Plot cross-validation results
+plot(ridge_cv)</code></pre>
+<p><img src="/post/2021-03-31-math-grit-and-matching-part-4/index.en_files/figure-html/unnamed-chunk-4-1.png" width="672" />
+The dotted vertical line on the left shows the value of (the log of) lambda for which the mean squared error in the test data set is minimal. The dotted line to the right adds one standard error to this value and is often used because it is more conservative. There is no deep theory behind choosing this value. It is rather an extra barrier against overfitting that <a href="https://stats.stackexchange.com/questions/138569/why-is-lambda-within-one-standard-error-from-the-minimum-is-a-recommended-valu">works well in practice</a>.</p>
+<p>The number 16 on top of the graph refers to the number of coefficients that are left in the model. Because of the L2 norm for the penalty term in ridge regression, small coefficients are penalized less severely than in L1. The reason is that squaring nonzero coefficients with absolute value &lt; 1 makes them smaller in absolute terms and hence decreases the penalty term.</p>
+<pre class="r"><code># setting alpha to 1 results in lasso regression
+lasso_cv &lt;- cv.glmnet(X, y, alpha = 1, 
+                      standardize = FALSE, nfolds = 10)
+
+
+res &lt;- glmnet(X, y, alpha = 0, lambda = lambdas_to_try, standardize = FALSE)
+plot(res, xvar = &quot;lambda&quot;)
+legend(&quot;bottomright&quot;, lwd = 1, col = 1:6, legend = colnames(X), cex = .7)
+abline(v=log(ridge_cv$lambda.min), col=&#39;grey&#39;, lwd=2, lty=&quot;dashed&quot;)
+abline(v=log(ridge_cv$lambda.1se), col=&#39;black&#39;, lwd=2, lty=&quot;dashed&quot;)</code></pre>
+<p><img src="/post/2021-03-31-math-grit-and-matching-part-4/index.en_files/figure-html/unnamed-chunk-5-1.png" width="672" />
+In the plot above we see how coefficients shrink by increasing the value of lambda in ridge regression. The dashed grey line shows the log of lambda for which the mean squared error in the test set in minimal and the black dashed line adds one standard error to this value. We see that indeed none of the coefficients shrinks to zero for either lambda.</p>
+<p>Let’s repeat the analysis for the L1 norm, which leads to lasso regression.</p>
+<pre class="r"><code># Set alpha to 1 to get lasso
+lasso_cv &lt;- cv.glmnet(X, y, alpha = 1, 
+                      standardize = FALSE, nfolds = 10)
+# Plot cross-validation results
+plot(lasso_cv)</code></pre>
+<p><img src="/post/2021-03-31-math-grit-and-matching-part-4/index.en_files/figure-html/lasso-1.png" width="672" />
+We see that the minimum value for lambda eliminates only one variable, but lambda plus one standard error eliminates about 8. Let’s get a more precise picture of this by plotting the size of the coefficients.</p>
+<pre class="r"><code>res &lt;- glmnet(X, y, alpha = 1, lambda = lambdas_to_try, standardize = TRUE)
+plot(res, xvar = &quot;lambda&quot;)
+legend(&quot;bottomright&quot;, lwd = 1, col = 1:6, legend = colnames(X), cex = .7)
+abline(v=log(lasso_cv$lambda.min), col=&#39;grey&#39;, lwd=2, lty=&quot;dashed&quot;)
+abline(v=log(lasso_cv$lambda.1se), col=&#39;black&#39;, lwd=2, lty=&quot;dashed&quot;)</code></pre>
+<p><img src="/post/2021-03-31-math-grit-and-matching-part-4/index.en_files/figure-html/unnamed-chunk-6-1.png" width="672" />
+Choosing lambda plus one SE gets rid of the bunch of coefficients that may not be predictive out of sample. Let’s pull out the values for the coefficients at lambda plus one SE.</p>
+<pre class="r"><code>coef(lasso_cv, s = lasso_cv$lambda.1se)</code></pre>
+<pre><code>## 17 x 1 sparse Matrix of class &quot;dgCMatrix&quot;
+##                            1
+## (Intercept)     0.0240899596
+## raven           0.1282562630
+## wealth          .           
+## risk            .           
+## success         0.1773367113
+## age             .           
+## male            .           
+## task_ability    0.1464104673
+## grit_survey1    0.0191930761
+## belief_survey1  .           
+## verbalscore1    0.0846532468
+## mathscore1      0.0939515697
+## csize          -0.0129247253
+## grit            0.0012220676
+## classid         0.0005707588
+## schoolid        .           
+## sample          .</code></pre>
+<p>If we go with this value of lambda, we are left with verbalscore1, mathscore1, csize, grit, classid, grit_survey1 and raven. Let’s check out the ramifications of these variable selections as we now turn to matching.</p>
+</div>
+</div>
+<div id="methods-of-matching" class="section level2">
+<h2>Methods of Matching</h2>
+<p>There are several methods of ‘mathing’ - that is, pruning data until we are left with closely matched pairs of observations that we can compare. We first discuss the most popular one, propensity score matching, and the problems that come with it. We then lay out a preferred alternative method.</p>
+<div id="propensity-score-matching" class="section level3">
+<h3>Propensity Score Matching</h3>
+<p>The idea behind propensity score matching is to make a model that predicts which individual is assigned to the treatment group. Since an individual is either in the treatment or control condition, this model predicts a binary variable and can be for example a logistic model. It is then possible to compare pairs of individuals that were equally likely to get the treatment, but where one actually got the treatment and one didn’t.</p>
+<p>The first problem with this idea is that individuals are compared based on variables that predict whether they would have gotten the treatment and not on variables that predict the outcome that we care about. Hence, propensity score matching may fail to adjust for confounders.</p>
+<p>Second, if individuals are randomly assigned to the treatment group, observations would be randomly matched. And random matching of pairs leads to <a href="https://gking.harvard.edu/files/gking/files/pan1900011_rev.pdf">terribly unbalanced outcomes</a>. Of course, if assignment were random, there would be no need for matching. But here the third point comes in.</p>
+<p>Typically, there are many covariates we want to adjust for in an analysis. These covariates live in multidimensional space. By carrying out a logistic regression on the treatment variable, propensity score matching projects observations in this multidimensional space on a line segment from 0 to 1, which is of course one-dimensional. The multidimensional distance between observations is thus squashed and lost forever as they are moved to the line segment. Points that are far apart in multidimensional space can and will be projected onto the same point on the line segment. As different as these observations are, as far as propensity score matching is concerned they are now the same. The best that propensity score matching can do is to assign the observations randomly to treatment and control conditions and then move them back into multidimensional space for further analysis.</p>
+<p>It turns out that these theoretical problems are born out <a href="https://gking.harvard.edu/files/gking/files/pan1900011_rev.pdf">both in simulation studies and real world data sets</a>. These studies show that propensity score matching manages to reduce model dependence and bias in the beginning of the pruning process. But as pruning goes on, observations are projected ever closer together on the line segment from 0 to 1, and start to be assigned more randomly to treatment and control groups. Which amounts to unbalanced assignment.</p>
+</div>
+<div id="mahalanobis-distance-matching" class="section level3">
+<h3>Mahalanobis Distance Matching</h3>
+<p>Instead of projecting observations on a line segment, one can calculate the so called Mahalanobis distance. This metric takes the Euclidean distance between two vectors of covariates belonging to two observations, except that they are standardized by the covariance matrix. The standardization solves the problems that covariates are measured in different units. If one variable is the distance from work in meters and another variable is height, it makes no sense to use the reported units. The influence of height would be negligible. So one either has to weight units manually or standardize them.</p>
+<p>Another alternative that we will not pursue here is coarsened exact matching, which does not calculate a type of Euclidian distance, but instead constructs a grid and compares observations within the same rectangle of the grid. See <a href="https://gking.harvard.edu/files/abs/cemStata-abs.shtml">here</a> for more details.</p>
+</div>
+</div>
+<div id="the-matching-frontier" class="section level2">
+<h2>The Matching Frontier</h2>
+<p>A fundamental trade off for all methods of pruning is the trade off between variance and bias. If pruning does its work, then the imbalance between the treatment and control groups is reduced, and so the bias of the estimate of the difference between the groups goes down. However, the more we prune, the fewer observations are left and the higher the variance around our estimate.</p>
+<p>The best way to deal with this trade off is to make it visible. To this end, we make use of an algorithm that finds the optimal assignment of observations over the two groups for every number of pruned observations. Details on the algorithm can be found <a href="https://gking.harvard.edu/files/gking/files/ajps12272_lr.pdf">here</a>. We use its implementation in the <code>MatchingFrontier</code> package.</p>
+<p>We will carry out matching with varying variable selections. These variables are the criteria on which we balance the treatment and control group, so choosing them is a big deal.</p>
+<div id="author-variable-selection" class="section level3">
+<h3>Author variable selection</h3>
+<p>We start with the variables that were in the author’s original model. We use data from both waves of the study, because we hope that matching can remedy possible experimental design flaws from the first wave (note that model dependence creeps in here).</p>
+<pre class="r"><code># combine the two waves of the Grit study and select the variables in the author&#39;s model
+sample_comb &lt;- bind_rows(sample1,sample2) %&gt;% 
+  filter(inconsistent==&quot;0&quot;) %&gt;% 
+  select(male, raven, csize, belief_survey1, mathscore1, grit, mathscore2) %&gt;% 
+  drop_na() %&gt;% 
+  as.data.frame()
+
+# Let&#39;s have a look at the remaining data set
+glimpse(sample_comb)</code></pre>
+<pre><code>## Rows: 1,758
+## Columns: 7
+## $ male           &lt;dbl&gt; 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0...
+## $ raven          &lt;dbl&gt; 0.513867259, 1.525037646, -1.002888441, 1.525037646,...
+## $ csize          &lt;dbl&gt; 36, 36, 36, 36, 36, 38, 38, 38, 38, 38, 38, 38, 38, ...
+## $ belief_survey1 &lt;dbl&gt; -0.3747228, 0.5035511, -0.9515215, -0.0762998, 0.210...
+## $ mathscore1     &lt;dbl&gt; 0.18841290, 1.39717412, -0.21450749, 1.39717412, -1....
+## $ grit           &lt;dbl&gt; 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0...
+## $ mathscore2     &lt;dbl&gt; 1.06037903, 0.51145208, -0.03747482, 1.06037903, -1....</code></pre>
+<p>After dropping NA values, we have 1758 observations left. The rest was left out because at least one value was missing on the variables that we selected. (An avenue that we not explore here is to first impute missing values and then perform matching.) Next, we let the algorithm in the <code>MatchingFrontier</code> package calculate the optimal imbalance for every number of pruned observations.</p>
+<pre class="r"><code># collect the names of the selected variables in a vector
+data_var_sel &lt;- colnames(sample_comb)[!(colnames(sample_comb) %in% c(&#39;mathscore2&#39;, &#39;grit&#39;))]
+
+# Calculate the matching frontier with a function from the MatchingFrontier package
+frontier &lt;- makeFrontier(dataset = sample_comb,
+                            treatment = &#39;grit&#39;,
+                            match.on = data_var_sel)</code></pre>
+<pre><code>## Calculating Mahalanobis distances...
+## Calculating theoretical frontier...
+## Calculating information for plotting the frontier...</code></pre>
+<pre class="r"><code>plot(frontier)</code></pre>
+<p><img src="/post/2021-03-31-math-grit-and-matching-part-4/index.en_files/figure-html/frontier-1.png" width="672" />
+We see that the Mahalanobis distance between matched pairs decreases smoothly as we prune more observations. There are quick gains for the first 500 observations that we throw away, but the improvement afterward is nothing to sniff at either.</p>
+<p>We now run the model that estimates the effect of <code>grit</code> on maths scores for every number of pruned observations.</p>
+<pre class="r"><code># We use the model from the authors of the Grit study
+my.form &lt;- as.formula(mathscore2 ~  male + raven + csize + belief_survey1 + mathscore1 + grit)
+
+# With it, we estimate the effect for every number of pruned observations
+mahal.estimates1 &lt;- estimateEffects(frontier,
+                                   &#39;mathscore2 ~ grit&#39;,
+                                   mod.dependence.formula = my.form,
+                                   continuous.vars = c(&#39;raven&#39;, &#39;belief_survey1&#39;, &#39;mathscore1&#39;),
+                                   prop.estimated = .1,
+                                   means.as.cutpoints = TRUE
+)
+# We plot the result
+plot(mahal.estimates1, 
+     ylim=c(0,0.6),
+     cex.lab = 1.4,
+     cex.axis = 1.4,
+     panel.first =
+       grid(NULL,
+            NULL,
+            lwd = 2,
+       )
+     )</code></pre>
+<p><img src="/post/2021-03-31-math-grit-and-matching-part-4/index.en_files/figure-html/effects-1.png" width="672" /></p>
+<p>We see that as we prune more students, our estimate of the effect size goes up! We also note that the orange band around the effect size line is quite small but widens at the end. This band is the <a href="https://gking.harvard.edu/files/gking/files/ajps12272_lr.pdf">Athey-Imbens model dependence interval</a>. To calculate it, a base model is used to estimate an effect after which the data set is split on the basis of the covariates in a bunch of ways. If the outcomes are unstable, there is high model dependence and the band is wider. For this data set and model the model dependence is modest, even at the very end.</p>
+<p>In other words, as we reduce bias, the estimated effect goes up significantly and approaches 0.5. By this account the authors may have underestimated the effect of the grit intervention.</p>
+</div>
+<div id="lasso-variable-selection" class="section level3">
+<h3>Lasso variable selection</h3>
+<p>Next we select the variables that are left in the lasso regression model by choosing the minimizing lambda + 1 SE.</p>
+<pre class="r"><code>sample_comb &lt;- bind_rows(sample1,sample2) %&gt;% 
+  filter(inconsistent==&quot;0&quot;) %&gt;% 
+  select(verbalscore1, mathscore1, csize, grit, classid, grit_survey1, raven, mathscore2) %&gt;% 
+  drop_na() %&gt;% 
+  as.data.frame()
+
+data_var_sel &lt;- colnames(sample_comb)[!(colnames(sample_comb) %in% c(&#39;mathscore2&#39;, &#39;grit&#39;))]
+
+frontier &lt;- makeFrontier(dataset = sample_comb,
+                         treatment = &#39;grit&#39;,
+                         match.on = data_var_sel)
+
+my.form &lt;- as.formula(mathscore2 ~  verbalscore1 + mathscore1 + csize + grit + classid + grit_survey1 + raven)
+
+mahal.estimates &lt;- estimateEffects(frontier,
+                                   &#39;mathscore2 ~ grit&#39;,
+                                   mod.dependence.formula = my.form,
+                                   continuous.vars = c(&#39;raven&#39;, &#39;belief_survey1&#39;, &#39;mathscore1&#39;,&#39;verbalscore1&#39;, &#39;grit_survey1&#39;, &#39;csize&#39;),
+                                   prop.estimated = .1,
+                                   means.as.cutpoints = TRUE
+)
+
+plot(mahal.estimates, 
+     ylim=c(0,0.6),
+     cex.lab = 1.4,
+     cex.axis = 1.4,
+     panel.first =
+       grid(NULL,
+            NULL,
+            lwd = 2,
+       )
+)</code></pre>
+<p><img src="/post/2021-03-31-math-grit-and-matching-part-4/index.en_files/figure-html/lasso_matching-1.png" width="672" />
+We see again that as biased is reduced, we are led to believe that the effect is quite a bit higher than we thought. Towards the end, the estimate becomes highly model dependent though as can be seen from the wide band at the end.</p>
+</div>
+<div id="all-pre-treatment-variables" class="section level3">
+<h3>All pre-treatment variables</h3>
+<p>The choice for the lasso variables was based on adding a SE to the minimizing lambda. That choice could have been made differently. As were are trying to reduce model dependence, we should run the analysis with all 16 independent variables that were measured before the intervention occured.</p>
+<pre class="r"><code>sample_comb &lt;- bind_rows(sample1,sample2) %&gt;% 
+  filter(inconsistent==&quot;0&quot;) %&gt;% 
+  select(raven,wealth,risk,age,male,grit_survey1,belief_survey1,
+         verbalscore1,mathscore1,mathscore2,csize,grit,classid,schoolid,sample, success, task_ability) %&gt;% 
+  drop_na() %&gt;% 
+  as.data.frame()
+
+data_var_sel &lt;- colnames(sample_comb)[!(colnames(sample_comb) %in% c(&#39;mathscore2&#39;, &#39;grit&#39;))]
+
+frontier &lt;- makeFrontier(dataset = sample_comb,
+                         treatment = &#39;grit&#39;,
+                         match.on = data_var_sel)
+
+my.form &lt;- as.formula(mathscore2 ~  raven + wealth + risk + age+male+grit_survey1+belief_survey1+
+                        verbalscore1+mathscore1+csize+grit+classid+schoolid+sample +success + task_ability)
+
+mahal.estimates &lt;- estimateEffects(frontier,
+                                   &#39;mathscore2 ~ grit&#39;,
+                                   mod.dependence.formula = my.form,
+                                   continuous.vars = c(&#39;raven&#39;, &#39;belief_survey1&#39;, &#39;mathscore1&#39;,&#39;verbalscore1&#39;, &#39;confidence_survey2&#39;,
+                                                       &#39;age&#39;, &#39;grit_survey1&#39;, &#39;csize&#39;),
+                                   prop.estimated = .1,
+                                   means.as.cutpoints = TRUE
+)
+
+plot(mahal.estimates, 
+     ylim=c(-0.3,0.7),
+     cex.lab = 1.4,
+     cex.axis = 1.4,
+     panel.first =
+       grid(NULL,
+            NULL,
+            lwd = 2,
+       )
+)</code></pre>
+<p><img src="/post/2021-03-31-math-grit-and-matching-part-4/index.en_files/figure-html/unnamed-chunk-8-1.png" width="672" />
+When we balance based on all pre-treatment variables, we note that the same tendency for higher effect size estimates occurs. There is a steep downward turn at the end though, which is surrounded by a huge amount of uncertainty that arises from model dependence.</p>
+</div>
+</div>
+<div id="conclusion" class="section level2">
+<h2>Conclusion</h2>
+<p>The initial surprise over the enhanced effect size of <code>grit</code> due to matching dissipates in the end then. There is no theoretical model or motivation for the author’s variable selection. The minimizing lambda + 1 SE variable selection based on the lasso regression is supported by practitioners of the technique. But there is no theoretical basis for choosing this value of lambda over the minimizing lambda itself, which kept all variables in the model except for one.</p>
+<p>The conservative approach then is to not value the results of the lasso variable selection much more than the model using all pre-treatment variables. This suggests that the effect size may be a bit higher than about 0.2, as previous analyses suggested, but that there is too much uncertainty due to model dependence to put a number on it.</p>
+</div>
