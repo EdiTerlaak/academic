@@ -155,7 +155,7 @@ We start by taking second partial derivatives of the log-likelihood function wit
 $$\mathbf{H}(\theta)=\frac{\partial^{2}}{\partial\theta_{i}\partial\theta_{j}}ln(\mathcal{L}(\theta))$$
 You may remember this matrix from a calculus class where you approximated some wild surface with a quadratic graph. In the process, you had to calculate the Hessian. This is what we are doing for wild likelihood surfaces (not the ones we are dealing with in this post) as well. We approximate them with a quadratic surface. If you evaluate the Hessian at a critical point (here: the maximum of the likelihood surface), it gives you information about the curvature. What matters here is that it tells you the steepness near the peak. If the region around the peak is very steep, then you are more certain of your estimate.
 
-If you multiply the Hessian by -1 you get a matrix that is called the Fisher Information (I). You do this because the second derivative at a maximum is negative. So this operation cancels that minus sign and makes the Fisher Information positive. 
+If you multiply the Hessian by -1 you get a matrix that is called the observed Fisher Information (I). You do this because the second derivative at a maximum is negative. So this operation cancels that minus sign and makes the Fisher Information positive. 
 $$\mathbf{I}(\theta)=-\frac{\partial^{2}}{\partial\theta_{i}\partial\theta_{j}}ln(\mathcal{L}(\theta))$$
 So a bigger value for I means that the curvature around the maximum is greater. This is a good thing, because it means you are more sure of your estimate.  
 
@@ -165,7 +165,7 @@ We skip the derivation, which is actually not too bad. More work is the stronger
 $$\hat{\theta}_{\mathrm{ML}}\stackrel{a}{\sim}\mathcal{N}\left(\theta_{0}, [\mathbf{I}(\hat{\theta}_{\mathrm{ML}})]^{-1}\right)$$
 A proof can be found [here](https://ocw.mit.edu/courses/mathematics/18-443-statistics-for-applications-fall-2006/lecture-notes/lecture3.pdf). This result looks like the Central Limit Theorem (CLT), but is more general. After all, $\hat{\theta}_{\mathrm{ML}}$ does not only stand for the mean (as in the CLT), but can be any parameter that we care about in the model. 
 
-We will now approximate this distribution with data from our sample. We already multiplied the output of the `lf` function by -1 in the code, so we just need to invert the Hessian that `optim` spits out to get the Fisher Information matrix. If we take the square root of the diagonal entries, we can read off the standard errors of our coefficients. We compare them with the output of lm, which calculates standard errors via another route.
+We will now approximate this distribution with data from our sample. We already multiplied the output of the `lf` function by -1 in the code, so we just need to invert the Hessian that `optim` spits out to get the Fisher Information matrix. If we take the square root of the diagonal entries, we can read off the standard errors of our coefficients. We compare them with the output of `lm`, which calculates standard errors via another route.
 
 ```{r}
 # invert hessian to calculate Fisher Information matrix
@@ -178,7 +178,7 @@ se
 dat_fake <- as.data.frame(cbind(X,data_y))
 summary(lm(data=dat_fake, data_y ~ 1 + data_x))
 ```
-We note that the estimates of the error are practically the same. The standard error of `r formatC(se[1], digits=3)` around the intercept means that we are not surprised we were off by `r formatC(p$par[1]-3, digits=3)`.
+We note that the estimates of the standard error by `optim` and `lm` are practically the same. The standard error of `r formatC(se[1], digits=3)` around the intercept means that we are not surprised we were off by `r formatC(p$par[1]-3, digits=3)`.
 
 ## Simulating From a Likelihood Model
 If ML gives the same information as lm, we may wonder why we should bother. One answer is that ML can also be applied when the covariates have a nonlinear relation with the response. Another answer is that we have more freedom in simulating whichever quantity of interest we care about. 
@@ -267,8 +267,10 @@ ggplot(expectedsim, aes(x=expectedsim[,1])) +
 As expected, the uncertainty has been reduced, but based on these data, we are not even that confident saying what the average math anxiety will be for this group of teachers. The estimation uncertainty alone prevents this.
 
 ### Taking Stock
-In this post we went through some of the basics of maximum likelihood in the case of linear relations and Gaussian errors. The theory only shines though when we loosen both restrictions. That will be the topic of a future post on Generalized Linear Models in this series. We can already note pros and cons though to finish off the present discussion.  
+In this post we went through some of the basics of maximum likelihood in the case of linear relations and Gaussian errors. The theory only shines though when we loosen both restrictions. That will be the topic of a future post in this series on Generalized Linear Models. We can already note pros and cons though to finish off the present discussion.  
 
-A nice feature of likelihood theory is that it can flexibly generate point estimates of the parameter values we happen to be interested in. A downside is that the numbers that the likelihood function generates have no meaning for us. We therefore did not report them. That is, the surface that reflects the likelihood for all the possible parameter values is only meaningful when we compare the heights for parameter values within that space to each other (or with the same parameters for a different model based on the same data). In fact, we ignored the constant term that shifts the height up and down for precisely this reason. It does not matter if everything is shifted up or down. Only the relative heights matter. 
+A downside is that the numbers that the likelihood function generates have no meaning for us. We therefore did not report them. That is, the surface that reflects the likelihood for all the possible parameter values is only meaningful when we compare the heights for parameter values within that space to each other (or with the same parameters for a different model based on the same data). In fact, we ignored the constant term that shifts the height up and down for precisely this reason. It does not matter if everything is shifted up or down. Only the relative heights matter. 
 
-Moreover, the likelihood is conditional on the data that were used in the analysis. It therefore makes no sense to compare likelihoods for parameter values that were estimated on the basis of different data. In sum, likelihoods are meaningless if they are reported for only one model and they are meaningless when comparing models based on different data sets.     
+Moreover, the likelihood is conditional on the data that were used in the analysis. It therefore makes no sense to compare likelihoods for parameter values that were estimated on the basis of different data. In sum, likelihoods are meaningless if they are reported for only one model and they are meaningless when comparing models based on different data sets. 
+
+A nice feature of likelihood theory is that it can flexibly generate point estimates for the parameters we happen to be interested in. As we shown, simulating the most likely points from the model - with fundamental and stochastic uncertainty - does add a layer to the analysis, but actually makes the results easier to interpret.      
