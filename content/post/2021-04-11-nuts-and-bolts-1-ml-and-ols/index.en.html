@@ -56,7 +56,7 @@ The outcome of this calculation is some crazy number that is very small and does
 <p><span class="math display">\[ln(\mathcal{L}(\mu_i,\sigma_{i}|y))=\sum_{i=1}^{n}ln(f(y_{i}|\mu_i,\sigma_{i})) \]</span>
 Filling in the formula for the normal distribution reveals what model we were assuming all along.</p>
 <p><span class="math display">\[ln(\mathcal{L} (\mu_i,\sigma_{i}|y))=\sum_{i=1}^{n}ln(\frac{1}{\sqrt{2\pi}\sigma}e^{-\frac{(y_{i}-\mu_{i})^2}{2\sigma^2}}) \]</span>
-Taking the natural log of e will simplify things considerably. Since we want to get at the maximum likelihood estimate for the mean, we also drop terms that do not depend on <span class="math inline">\(\mu\)</span>.</p>
+Taking the natural log will simplify things considerably. Since we want to get at the maximum likelihood estimate for the mean, we also drop terms that do not depend on <span class="math inline">\(\mu\)</span>.</p>
 <p><span class="math display">\[ln(\mathcal{L}(\mu_i|y,\sigma_{i}))\approx \sum_{i=1}^{n}{-\frac{(y_{i}-\mu_{i})^2}{2\sigma^2}}\]</span>
 Substituting the scalar <span class="math inline">\(\beta\)</span> for <span class="math inline">\(\mu\)</span> (another name for the same thing now, later we will put more stuff in <span class="math inline">\(\beta\)</span>) and taking the partial derivative of this expression with respect to <span class="math inline">\(\beta\)</span> shows that the mean is the best estimate for <span class="math inline">\(\beta\)</span>.</p>
 <p>This is utterly unsurprising. If we assume that data are normally distributed, then the mean of the data is the best candidate for the <span class="math inline">\(\mu\)</span> in the normal probability distribution formula. In other words, the normal distribution with the sample mean at its center on average assigns the highest probabilities to such sample data.</p>
@@ -111,8 +111,8 @@ return(-logl)
 p&lt;-optim(c(5,2,4),lf,method=&quot;BFGS&quot;,hessian=T,y=data_y,X=X)
 # print out the paramter estimates
 p$par</code></pre>
-<pre><code>## [1]  2.707113  2.012361 19.242197</code></pre>
-<p>Let’s check how well ML has done. It estimates 2.71 for the intercept (true value 3) and 2.01 for the slope (true value 2). The real variance was 16 and is estimated to be 19.2.</p>
+<pre><code>## [1]  4.176248  1.976342 14.897150</code></pre>
+<p>Let’s check how well ML has done. It estimates 4.18 for the intercept (true value 3) and 1.98 for the slope (true value 2). The real variance was 16 and is estimated to be 14.9.</p>
 <p>We had only 65 data points, so we should give our model some slack. How much slack? That can also be computed from the likelihood formula in the form of standard errors. What follows is a bit of a technical story, but it hopefully gives some intuition for where standard errors come from.</p>
 <p>We start by taking second partial derivatives of the log-likelihood function with respect to the paramaters. We can arrange these values in a matrix. We do this in such a way that we get a so called Hessian matrix.
 <span class="math display">\[\mathbf{H}(\theta)=\frac{\partial^{2}}{\partial\theta_{i}\partial\theta_{j}}ln(\mathcal{L}(\theta))\]</span>
@@ -132,7 +132,7 @@ OI&lt;-solve(p$hessian)
 # standard errors are squared values on diagonal
 se &lt;- sqrt(diag(OI))
 se</code></pre>
-<pre><code>## [1] 0.86309658 0.04010731 2.72126621</code></pre>
+<pre><code>## [1] 0.81242919 0.03480456 2.10817070</code></pre>
 <pre class="r"><code># Compare with OLS using lm
 dat_fake &lt;- as.data.frame(cbind(X,data_y))
 summary(lm(data=dat_fake, data_y ~ 1 + data_x))</code></pre>
@@ -142,19 +142,19 @@ summary(lm(data=dat_fake, data_y ~ 1 + data_x))</code></pre>
 ## 
 ## Residuals:
 ##      Min       1Q   Median       3Q      Max 
-## -11.4087  -2.2888  -0.1138   2.6271  10.8298 
+## -10.9670  -2.0510   0.0539   2.4401   9.9184 
 ## 
 ## Coefficients:
 ##             Estimate Std. Error t value Pr(&gt;|t|)    
-## (Intercept)  2.70702    0.87186   3.105  0.00249 ** 
-## data_x       2.01237    0.04051  49.670  &lt; 2e-16 ***
+## (Intercept)  4.17576    0.82041    5.09 1.73e-06 ***
+## data_x       1.97636    0.03515   56.23  &lt; 2e-16 ***
 ## ---
 ## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
 ## 
-## Residual standard error: 4.431 on 98 degrees of freedom
-## Multiple R-squared:  0.9618, Adjusted R-squared:  0.9614 
-## F-statistic:  2467 on 1 and 98 DF,  p-value: &lt; 2.2e-16</code></pre>
-<p>We note that the estimates of the standard error by <code>optim</code> and <code>lm</code> are practically the same. The standard error of 0.863 around the intercept means that we are not surprised we were off by -0.293.</p>
+## Residual standard error: 3.898 on 98 degrees of freedom
+## Multiple R-squared:  0.9699, Adjusted R-squared:  0.9696 
+## F-statistic:  3162 on 1 and 98 DF,  p-value: &lt; 2.2e-16</code></pre>
+<p>We note that the estimates of the standard error by <code>optim</code> and <code>lm</code> are practically the same. The standard error of 0.812 around the intercept means that we are not surprised we were off by 1.18.</p>
 </div>
 <div id="simulating-from-a-likelihood-model" class="section level2">
 <h2>Simulating From a Likelihood Model</h2>

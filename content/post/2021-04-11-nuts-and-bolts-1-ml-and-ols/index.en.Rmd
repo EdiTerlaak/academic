@@ -82,7 +82,7 @@ $$ln(\mathcal{L}(\mu_i,\sigma_{i}|y))=\sum_{i=1}^{n}ln(f(y_{i}|\mu_i,\sigma_{i})
 Filling in the formula for the normal distribution reveals what model we were assuming all along.
 
 $$ln(\mathcal{L} (\mu_i,\sigma_{i}|y))=\sum_{i=1}^{n}ln(\frac{1}{\sqrt{2\pi}\sigma}e^{-\frac{(y_{i}-\mu_{i})^2}{2\sigma^2}}) $$
-Taking the natural log of e will simplify things considerably. Since we want to get at the maximum likelihood estimate for the mean, we also drop terms that do not depend on $\mu$. 
+Taking the natural log will simplify things considerably. Since we want to get at the maximum likelihood estimate for the mean, we also drop terms that do not depend on $\mu$. 
 
 $$ln(\mathcal{L}(\mu_i|y,\sigma_{i}))\approx \sum_{i=1}^{n}{-\frac{(y_{i}-\mu_{i})^2}{2\sigma^2}}$$
 Substituting the scalar $\beta$ for $\mu$ (another name for the same thing now, later we will put more stuff in $\beta$) and taking the partial derivative of this expression with respect to $\beta$ shows that the mean is the best estimate for $\beta$. 
