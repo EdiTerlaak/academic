@@ -33,9 +33,9 @@ In this post we will lay out the fundamentals of the theory of likelihood estima
 
 The fundamental puzzle of inference is to say something about an unknown process that generates data, when all you have in your hand are a few of its crumbs. Of course, if you truly understood every aspect of a process, you wouldn't need to do inference. But especially in the social sciences, this is never the case. So the problem of inference is to put probabilities on outcomes of a process that you do not understand. Although second best, it still gives some grip on reality. 
 
-It is hard to make progress with this puzzle unless we make an assumption. To make our life easier, we assume that data are generated on the basis of a parametric probability distribution. Think of the Normal, Bernoulli or Poisson distributions. The benefit of these things is that you don't have to estimate the probability for every possible value of the data. One or two parameters describe the entire probability distribution! Think of the mean and variance for the Gaussian, lambda for the Poisson and p for the Bernoulli. When you are willing to make this assumption, you are doing parametric statistics.
+It is hard to make progress with this puzzle unless we make some assumptions. You can do without these assumptions, but that is a topic for another time. To make our life easier, we first assume that the data were independently drawn from a population. Second, we assume that data are generated on the basis of a parametric probability distribution. Think of the Normal, Bernoulli or Poisson distributions. The benefit of these things is that you don't have to estimate the probability for every possible value of the data. One or two parameters describe the entire probability distribution! Think of the mean and variance for the Gaussian, lambda for the Poisson and p for the Bernoulli. When you are willing to make this assumption, you are doing parametric statistics.
 
-Instead of figuring out probabilities for the values of the process directly then, we estimate one or more parameters that we will call 'theta' ($\theta$) (theta can be a vector) that control a distribution that indirectly gives us the probabilities for values of the process. SO the problem is now transformed from estimating maybe thousands of values into estimating only one or more parameters, based on data and your assumption about a model (say, a linear model with a Gaussian distribution). 
+Instead of figuring out probabilities for the values of the process directly then, we estimate one or more parameters that we will call 'theta' ($\theta$) (theta can be a vector) that control a distribution that indirectly gives us the probabilities for values of the process. So the problem is now transformed from estimating maybe thousands of values into estimating only one or more parameters, based on data and your assumption about a model (say, a linear model with a Gaussian distribution). 
 
 We stress the last point here. In inference, the claims about our estimate and its uncertainty are conditional also on the model we picked. Often, we could have chosen a different model just as well. This so called 'model dependence' has become a more prominent topic of study in recent years. See for example [this article](https://journals.sagepub.com/doi/10.1177/1745691616658637) for a case study.
 
@@ -71,23 +71,23 @@ We begin with a maximum likelihood calculation for a simple linear model. There 
 
 We now run through the calculation of the ML, plugging in $\beta$ at the very end in order to get used to the idea of reparameterization. This $\beta$ could be a vector of covariates that predict the value we are interested in. Here however, to keep things simple, it is just a scalar that holds the value of $\mu$.
 
-Finding the maximum likelihood means maximizing the probability (or density) of values of the parameters given the data. We do this for each data point and multiply the values together (we can do this because we assume independence; we can still do likelihood inference without this assumption, but in that case things get a whole lot more complicated). 
+Finding the maximum likelihood means maximizing the probability (or density) of the data, given a parameter. In other words, we run through candidate parameters, and pick the ones that make the data the most likely. So for some candidate mean and standard deviation we set up a normal distribution and calculate the probability (technically the density) of this data point. We do this for all data points and multiply the densities together (we can do this because we assume independence; we can still do likelihood inference without this assumption, but in that case things get a whole lot more complicated). 
 
 $$\mathcal{L} (\mu_i,\sigma_{i}|y) = \prod_{i=1}^n f(y_{i}|\mu_i,\sigma_{i}) $$
-We are looking then for the $\mu$ and $\sigma$ that make the data the most likely. 
+The outcome of this calculation is some crazy number that is very small and doesn't have any intuitive meaning. It virtue is that it helps us find the $\mu$ and $\sigma$ that make the data the most likely. 
 
-Next, we take the log of both sides, because it allows us to write the product as a sum. This makes it easier to differentiate later.
+Next, we take the log of both sides, because it allows us to write the product as a sum. This makes it easier to differentiate later. Also, the crazy small number becomes a negative number that is large in absolute value and easier on the eye. 
 
 $$ln(\mathcal{L}(\mu_i,\sigma_{i}|y))=\sum_{i=1}^{n}ln(f(y_{i}|\mu_i,\sigma_{i})) $$
 Filling in the formula for the normal distribution reveals what model we were assuming all along.
 
 $$ln(\mathcal{L} (\mu_i,\sigma_{i}|y))=\sum_{i=1}^{n}ln(\frac{1}{\sqrt{2\pi}\sigma}e^{-\frac{(y_{i}-\mu_{i})^2}{2\sigma^2}}) $$
-Taking the natural log of e simplifies things considerably. Since we want to get at the maximum likelihood estimate for the mean, we drop terms that do not depend on $\mu$. 
+Taking the natural log of e will simplify things considerably. Since we want to get at the maximum likelihood estimate for the mean, we also drop terms that do not depend on $\mu$. 
 
-$$ln(\mathcal{L}(\mu_i,\sigma_{i}|y))\approx \sum_{i=1}^{n}{-\frac{(y_{i}-\mu_{i})^2}{2\sigma^2}}$$
+$$ln(\mathcal{L}(\mu_i|y,\sigma_{i}))\approx \sum_{i=1}^{n}{-\frac{(y_{i}-\mu_{i})^2}{2\sigma^2}}$$
 Substituting the scalar $\beta$ for $\mu$ (another name for the same thing now, later we will put more stuff in $\beta$) and taking the partial derivative of this expression with respect to $\beta$ shows that the mean is the best estimate for $\beta$. 
 
-This is utterly unsurprising. If we assume data are normally distributed, then the mean of the data is the best candidate for the $\mu$ in the normal probability distribution formula. In other words, the normal distribution with the sample mean at its center on average assigns the highest probabilities to the data. We are not concerned with showing the power of likelihood estimation here however. We will do that later. 
+This is utterly unsurprising. If we assume that data are normally distributed, then the mean of the data is the best candidate for the $\mu$ in the normal probability distribution formula. In other words, the normal distribution with the sample mean at its center on average assigns the highest probabilities to such sample data.
 
 Although the ML estimate was unimpressive, it does have nice properties which are helpful in more interesting cases. In particular, if there is an unbiased estimator for a problem, then ML will provide it, while also being efficient. Efficiency is a technical term that means that the variance around the unbiased estimator is minimal. And even if there is no unbiased estimator, ML will come up with a good one.  
 
@@ -267,10 +267,10 @@ ggplot(expectedsim, aes(x=expectedsim[,1])) +
 As expected, the uncertainty has been reduced, but based on these data, we are not even that confident saying what the average math anxiety will be for this group of teachers. The estimation uncertainty alone prevents this.
 
 ### Taking Stock
-In this post we went through some of the basics of maximum likelihood in the case of linear relations and Gaussian errors. The theory only shines though when we loosen both restrictions. That will be the topic of a future post in this series on Generalized Linear Models. We can already note pros and cons though to finish off the present discussion.  
+In this post we went through some of the basics of maximum likelihood in the case of linear relations and Gaussian errors. The theory only shines though when we loosen both restrictions. That will be the topic of a future post in this series on Generalized Linear Models. We can already note pros and cons though to wrap up the present discussion.  
 
-A downside is that the numbers that the likelihood function generates have no meaning for us. We therefore did not report them. That is, the surface that reflects the likelihood for all the possible parameter values is only meaningful when we compare the heights for parameter values within that space to each other (or with the same parameters for a different model based on the same data). In fact, we ignored the constant term that shifts the height up and down for precisely this reason. It does not matter if everything is shifted up or down. Only the relative heights matter. 
+A downside of ML is that the numbers that the likelihood function generates have no meaning for us. We therefore did not report them. That is, the surface that reflects the likelihood for all the possible parameter values is only meaningful when we compare the heights for parameter values within that space to each other (or with the same parameters for a different model based on the same data). In fact, we ignored the constant term that shifts the height up and down for precisely this reason. It does not matter if everything is shifted up or down. Only the relative heights matter. 
 
 Moreover, the likelihood is conditional on the data that were used in the analysis. It therefore makes no sense to compare likelihoods for parameter values that were estimated on the basis of different data. In sum, likelihoods are meaningless if they are reported for only one model and they are meaningless when comparing models based on different data sets. 
 
-A nice feature of likelihood theory is that it can flexibly generate point estimates for the parameters we happen to be interested in. As we shown, simulating the most likely points from the model - with fundamental and stochastic uncertainty - does add a layer to the analysis, but actually makes the results easier to interpret.      
+A nice feature of likelihood theory is that it can flexibly generate point estimates for the parameters we happen to be interested in. As we've shown, simulating the most likely points from the model - with fundamental and stochastic uncertainty - does add a layer to the analysis. We have to do more work. But the results are densities, which are easier to interpret for both lay people and practitioners.       
