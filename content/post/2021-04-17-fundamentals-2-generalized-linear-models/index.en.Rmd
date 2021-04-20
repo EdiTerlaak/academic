@@ -1,0 +1,145 @@
+---
+title: 'Fundamentals 2: Generalized Linear Models (technical)'
+author: Edi Terlaak
+date: '2021-04-17'
+slug: fundamentals-2-generalized-linear-models
+categories: []
+tags: []
+subtitle: ''
+summary: ''
+authors: []
+lastmod: '2021-04-17T17:18:04+02:00'
+featured: no
+image:
+  caption: ''
+  focal_point: ''
+  preview_only: no
+projects: []
+---
+```{r include=F, warning=F}
+library(tinytex)
+```
+In the previous post, we walked through the basic theory of maximum likelihood and coded up some examples. In these models, the relation between the predictors and the response was linear and the error around the expected value was normally distributed. We will now relax both restrictions. That is, we will allow for nonlinear relations between the response and the predictors and we will we allow different probability distributions for the error. 
+
+We will achieve both ends by using a Generalized Linear Model (GLM). This is a bit odd: how are we going to model nonlinear relations with a 'linear' model? We can do this because GLMs are not really linear. It takes a linear regression model and slaps a so called link function around the response variable, which makes the relation between predictor and response nonlinear. This may sound mysterious now, but will become clear soon.
+
+In GLMs we are also able to use distributions beyond the Normal, but not all. The distributions that are allowed come from the so called exponential family. This is not the same as the exponential distribution, which is just a member of this family of distributions. As are the famous distributions from an intro to probability class, such as the Normal, the Binomial, The Poisson or the Gamma, but not for example the uniform. 
+
+The main motivation for introducing the GLM framework is computational. As nonlinear functions and distributions grow more wild, the maximum likelihood surface will typically become more wild as well. With millions of hills and mountains, finding the absolute maximum of the surface can become extremely difficult, even with the help of computer power. The restrictions introduced by GLM help to solve this problem. 
+
+Understanding the logic behind GLM also sheds light on famous regression models. Take the most famous nonlinear GLM, which is the logistic model.
+$$logit(p)=log(\frac{p}{1-p})$$
+This formula seems haphazard. But, as we will see, from within the GLM framework the logit function is a natural way to link predictors and a (0,1) probability response. 
+
+At the end we briefly discuss a more principled line of reasoning in favor of the GLM framework, which is about entropy. 
+
+## The Exponential Family
+Recall that a probability distribution assigns probabilities (or densities) to values of the random variable X that we are interested in. A parametric probability distribution is special in that this process of assignment is controlled by typically just one or two parameters $\theta$. We use the following notation to describe such probability distributions $p(\theta, X)$. 
+
+A probability distribution belongs to the exponential family if it can be written in the form
+
+$$p(\theta,X)=exp(\theta \cdot X)c(\theta)h(X)$$
+The expression 'exp' stands for 'exponential' and could also be written as $e^{(\theta \cdot X)}$ etc. The crucial feature of an exponential family member is the multiplication of $\theta$ and $X$ in the exponent. 
+
+It is hard to multiply $\theta$ and $X$ together though, as they are typically vectors of different dimension. In order to solve this problem, we introduce the functions $\eta_j(\theta)$ and $T_j(X)$, where j keeps track of the k parameters of the distribution (k=2 for the normal distribution for example). We thus basically write the sum that results from a dot product calculation of two vectors of dimension k. 
+
+We also do some algebra that brings the formula into a form that will prove useful. We fold $c(\theta)$ into the exponent, which we can do if we first take the log. We also invert $c(\theta)$ because we want to have a minus sign in the formula - it will become clear why soon.   
+
+$$p(\theta,X)=exp[\sum_{j=i}^{k} \eta_j(\theta)\ T_j(X) - log(\frac{1}{c(\theta)})\ ]\ h(X)$$
+Next, we write $log(\frac{1}{c(\theta)})$ as $B(\theta)$. We give this term this name because it will play a key role in the story that comes up. We remove the summation sigma notation in order to simplify the notation. Below we read vectors where the dot product computation was previously written out by the summation sigma. So we now have
+
+$$p(\theta,X)=exp[\eta(\theta)\ T(X) - B(\theta)\ ]\ h(X)$$
+This all quite abstract. Let's look at the normal distribution and check if we can wrangle it into the form above. First, we remind ourselves what the normal looks like. 
+
+$$p(\theta,X)=\frac{1}{\sqrt{2\pi}\sigma}exp(-\frac{(y_{i}-\mu_{i})^2}{2\sigma^2})$$
+Next, we multiply out the squared term and fold $\frac{1}{\sqrt{2\pi}}$ into the exponent.  
+
+$$p(\theta,X)=exp(\ [x \cdot \frac{\mu }{\sigma^2}+x^{2}\cdot  \frac{-1}{2\sigma^2}]-[\frac{\mu^2}{2\sigma^2}+log(\sigma \sqrt{2\pi})]\ )$$
+We see the dot product computation written out inside the first set of square brackets, which can be read as $[T_{1}(X) \cdot\eta_{1}(\theta) + T_{2}(X) \cdot\eta_{2}(\theta)]$. The second set of square brackets contains $B(\theta)$.  
+
+Let's get some more intuition by molding the Bernoulli into the exponential family shape. We know that $Bern(p)=p^x (1-p)^{1-x}$. This looks a bit like cheating, but if we take the log of this expression and then exponentiate, we get it in the right form. After some algebra we get
+
+$$Bern(p)=exp(x \cdot log(\frac{p}{1-p})-log(\frac{1}{1-p})) $$
+So we learn that $T(X)=x$, that $\eta(\theta)=log(\frac{p}{1-p})$ and that $B(\theta)=log(\frac{1}{1-p})$ 
+
+And now for the last bit of terminology before we see were all of this is leading: we say that the distribution is in the *Canonical* form if x and $\theta$ are multiplied together directly . So for the Bernoulli, we would need to say that the parameter $\theta$ we are estimating is not p but $log(\frac{p}{1-p})$. 
+
+We also split off a dispersion parameter $\phi$, which says something about the spread of the distribution. For the normal case it would be the variance. Because we will soon do regression, we switch from X to Y. This is the form we will work with.
+
+$$ p(\theta,X)=exp(\frac{y \cdot \theta-b(\theta)}{\phi}+c(y,\theta))$$
+We are now in a position to reap fruits. If we pretend we have one observation and want to maximize the likelihood of the log of the canonical form (remember that we always take the log before we maximize), then the role of $b(\theta)$ becomes clear. 
+
+The process by which we arrive the results below involve a sequence of substitutions of the expectation of the partial derivative of the log likelihood with respect to theta as well as the negative of the Fisher information. They do not build intuition and are not discussed here, but see [here](https://www.youtube.com/watch?v=mc1y8m9-hOM&list=PLUl4u3cNGP60uVBMaoNERc6knT_MgPKS0&index=20) for the details.  
+
+The result of the substitutions is that $$E_{\theta}(Y)=b^{\prime}(\theta)$$
+
+and $$Var(Y)=b^{\prime\prime}(\theta)\cdot \phi$$ 
+
+So if $\phi$ is known, we have the main moments of the distribution sitting there in $b(\theta)$). 
+
+## Canonical link functions
+Now that we have a grip on the type of distributions that are allowed in GLMs, we turn to the link functions that are allowed. So the link function takes the expected value $E(Y|X)$ we are estimating in regression and makes it nonlinear. 
+$$\mu(X)=X^T\beta $$
+Intuitively, one would like to fiddle around with the right hand side of the equation to make the relation nonlinear. The link function g is defined on the left hand side however.
+$$g(\mu(X))=X^T\beta $$
+If we want to change the right hand side to estimate $\mu$, then we use the inverse of g.
+$$\mu(X)=g^{-1}(X^T\beta) $$
+This means that the inverse of g must exist. Therefore we require the image of g to be the real numbers R. We furthermore want g to be continuously differentiable and to be not just increasing, but strictly increasing (so it can't be flat).
+
+Just as we have a canonical exponential distribution, we have a canonical link. This is the g for which 
+$$ g(\mu)=\theta.$$
+So what is this mysterious g? Well, we know $\mu = b^{\prime}(\theta)$ and we can work with that. 
+$$ \mu = g^{-1}(\theta)$$
+$$ b^{\prime}(\theta)= g^{-1}(\theta)$$
+$$ g = (b^{\prime}(\theta))^{-1}$$
+So we ground the canonical link in the all important $b(\theta)$ as well. 
+
+If we apply this reasoning to the canonical form of the Bernoulli, we'll discover where the logit comes from. We had
+$$ Bern(p)=exp(y \cdot log(\frac{p}{1-p})-log(\frac{1}{1-p})) $$
+and rewrite it as a function of $\theta$, so that
+
+$$ Bern(p)=exp(y \cdot \theta-log(1+ e^{\theta})) $$
+We discover that $b(\theta)=log(1+e^{\theta})$ and that 
+
+$$b^{\prime}(\theta)=\frac{e^{\theta}}{1+e^{\theta}}=p.$$
+If we write $\theta$ in terms of p we have the inverse, and so we found g.
+$$g=(b^{\prime}(\theta))^{-1}=log(\frac{p}{1-p})$$
+This is the familiar logit link.
+
+## Computation
+Now all the building blocks are in place to talk about computation. The problem was that the absolute maximum is hard to estimate if we have millions of hills and mountains. A solution to this computational problem is to ensure that the surface is concave. An example of a concave function is $f(x)=-x^2$. Taking the second derivative, you may recall, gives information about the concavity. You can check it is negative everywhere for f(x). This means that it has a unique maximum. If we are dealing with more than one dimension, then we need to check if the [Hessian matrix](https://www.youtube.com/watch?v=LbBcuZukCAw&list=PLSQl0a2vh4HC5feHa6Rc5c0wbRTx56nF7&index=82) is negative definite for all values of x.  
+
+We want to show now that we can ensure we are dealing with such functions in GLMs as well. 
+
+The next step is to think about inference for several observations. If we are doing regression, we want to tie these together with a $\beta$. So it is these $\beta$ that we are estimating now. Taking the log of an exponential family distribution conveniently cancels the exponentiation, which makes the log likelihood formula easier on the eye. We then apply the g inverse to the RHS to get a formula for exponential family members in general. 
+
+$$ \mathcal{L} (\beta|Y) =\sum_{i=1}^{n}\frac{Y_{i}h(X_{i}^T\beta)}{\phi}-\frac{b \circ h(X^T\beta)}{\phi}$$
+where $$ h = (g \circ b^{\prime})^{-1}.$$
+
+In this general case, there is nothing we can say about the shape of the likelihood surface. We don't know what h looks like in the general case after all. However, for the canonical link, h is the identity. Then $Y$ and $\theta$ are multiplied together after all. So for this subset we get 
+
+$$ \mathcal{L} (\beta|Y) = \sum_{i=1}^{n}\frac{Y_{i}X_{i}^T\beta}{\phi}-\frac{b(X^T\beta)}{\phi}$$
+In this case we can say something about the shape of the surface. The first term within the summation is linear with respect to $\beta$ so it doesn't add anything to the concavity of the function. So it all comes down to the second term. 
+
+We recall that for canonical distributions
+$$Var(Y)=b^{\prime\prime}(\theta)\cdot \phi$$
+which implies that if there is some dispersion, the second derivative of b is positive, while the minus sign in front of it makes it negative again. Hence, if the canonical parameterization is used, the log likelihood function is concave and there is a unique maximum. 
+
+## Entropy
+So far, we have seen that using canonical exponential families and canonical links is convenient when we compute the maximum likelihood. 
+
+There is a more principled argument for choosing distributions from the exponential family, which is related to entropy. This concept from information theory, which is also known as Shannon entropy, is a measure for surprise. That is, the entropy tells you how surprised you should be if you encounter a new bit of information. For a discrete random variable, one can calculate it's entropy with the following formula.
+
+$$ H(X) = -\displaystyle\sum_{x} p(x)\log p(x).$$
+You can check for example that if the random variable has probability 1 for a certain value, then the information is 0. This makes sense. If we know something for sure, there is no value in finding more information.
+
+The formula takes probabilities from a probability distribution (in this case a PMF, because the formula deals with discrete random variables). One may wonder in general which distributions maximize entropy. These are the distributions that generate the most surprise when new information comes in, and so are able to learn the most. These are the distributions one may want. 
+
+The answer turns out to depend on the constraints we put on the distribution. If the expected value is specified however, then distributions from the exponential family happen to maximize entropy. See [here](https://lips.cs.princeton.edu/exponential-families-and-maximum-entropy/#:~:text=The%20principle%20of%20maximum%20entropy,uncertainty%20consistent%20with%20the%20constraints.&text=belongs%20to%20an%20exponential%20family.) for a proof.
+
+## Summing up
+In conclusion it is worth noting that as we tried to give a rationale for using GLMs, we nowhere made the case that they accurately model some feature of reality. GLMs are what Richard McElreath calls 'geocentric models': models that generate outcomes that match what was seen, but do not necessarily model the process that generated the outcomes. The term 'geocentric' refers to ancient astronomers, who made models that gave the location of planets from their point of view on earth. What they modeled was what they saw against the nightly firmament however, and not the actual location. A space mission that used their maps would definitely not arrive at Mars! So it is with GLMs. They are useful in getting a grip on what we see, but we shouldn't trick ourselves into thinking we have modeled the data generating process.
+
+That being said, entropy gives some guidelines as to which exponential family distributions should be picked to model which process. This is a more principled way to build a model than to stare at the spread of your data and fit distributions until one happens to match. See this [lecture](https://youtu.be/-4y4X8ELcEM?list=PLDcUM9US4XdNM4Edgs7weiyIguLSToZRI&t=1210) for some of these guidelines.
+
+Even if the concept of entropy may not be that convincing for some, the computational argument in favor of GLMs is stronger than one may think. When we turn to Bayesian inference we will see that calculations of the estimates can become a nightmare, so that algorithms are developed that try to chart the unwieldy hyperspaces. The algorithms can go off the rails however, so that knowledge of their performance metrics is needed, while long wait times can become a factor as well. In sum, ease of computation is nothing to sniff at and GLMs deliver in that respect.     
