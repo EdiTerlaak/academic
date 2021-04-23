@@ -1,0 +1,188 @@
+---
+title: 'Mixing up Math: Item Response Theory (part 3)'
+author: Edi Terlaak
+date: '2021-04-21'
+slug: mixing-up-math-item-response-theory-part-3
+categories: []
+tags: []
+subtitle: ''
+summary: ''
+authors: []
+lastmod: '2021-04-21T15:06:19+02:00'
+featured: no
+image:
+  caption: ''
+  focal_point: ''
+  preview_only: no
+projects: []
+---
+
+
+
+<p>In the previous post, we investigated the claim by Doug Rohrer and colleagues that mixing up math questions has an effect size of about 0.8 on a math test. In the analysis, we assumed that the points scored on the test could simply be added up. We already questioned this assumption when we explored the data visually and found that for one topic, there seemed to be a jump in understanding - students either answered all four item correct or none correct.</p>
+<p>Now we no longer assume that student’s understanding of the math can be mapped directly onto the number of points scored. Instead, we model this understanding, or latent ability, with Item Response Theory (IRT). We first explain the basics of this theory and then use it to evaluate the test that was used in the Rohrer study. How to actually use the latent scores is a topic for a later post.</p>
+<div id="item-response-theory" class="section level2">
+<h2>Item Response Theory</h2>
+<p>The assumption of IRT is that when we for example administer a test, we are not just measuring the points scored, but really care about an underlying latent variable that causes points to be scored. This variable is the true ability <span class="math inline">\(\theta\)</span> of the students for the subject at hand. Instead of summing up the points on a test, the number of points gives information about the location <span class="math inline">\(\theta\)</span> of a student on the interval where the latent variable lives. The idea of the theory is that questions differ in their capacity to measure this latent ability. In order to make this idea precise we have to look at the model.</p>
+<p>Before we do so, we have to discuss two assumptions. First, we assume that a student’s performance on test items are independent of each other. Second, we assume (for now) that the test measures understanding on one dimension. In the case of the Rohrer math test, it was made up of four different topics, so in that sense it is certainly wrong to make this assumption. But then, we are already talking about only math questions. Also, even within a domain of math such as geometry we can always find subtopics. So by this logic we could never really make this assumption. Let’s go with the assumption of unidimensionality for now then and scrutinize it later.</p>
+<p>With respect to the data, we have {0,1} observations (a question is answered correctly or not) and so we want to model the probability that a students answers a questions correctly (i.e. scores a 1) based on their latent ability <span class="math inline">\(\theta\)</span>. At first glance, this set up sounds like any old logistic regression model (or probit or whatever you like). But the problem is actually quite different from estimating <span class="math inline">\(\beta\)</span> in ordinary maximum likelihood estimation for logistic models. The reason is that we do not have values of an explanatory variable X, like age or income. So we cannot simply calculate for every X which value of p best explains the {0,1} outcome on the test. This poses hard problems for estimation. We deal with them in a technical note.</p>
+<p>Let’s ignore estimation problems for now and assume that we have somehow conjured up some <span class="math inline">\(\theta&#39;s\)</span>. This means we are dealing with a standard logistic regression problem. We immediately complicate things again however, by performing a number of transformations that may be familiar from high school algebra. The operations are not as straightforward though, because the logit is not a standard function. The results of the transformations that we discuss below is the addition of the parameters <span class="math inline">\(\alpha_i\)</span> and <span class="math inline">\(\delta_i\)</span> for every test item i.
+<span class="math display">\[P(X_i=1|\theta) = \frac{\exp[\alpha_i(\theta - \delta_i)]}{1 + \exp[\alpha_i(\theta-\delta_i)]}\]</span>
+First, the parameter <span class="math inline">\(\delta\)</span> simple shifts the curve to the left when an item is easy and to the right if it is hard. This is a simple translation (<span class="math inline">\(\delta\)</span>,0). More interestingly, we multiply with respect to the y-axis by <span class="math inline">\(alpha\)</span>. Below we display results for <span class="math inline">\(\alpha=1\)</span> (black), <span class="math inline">\(\alpha=0.5\)</span> (blue) and <span class="math inline">\(\alpha=3\)</span> (red), to get a feel for this effect, because it is not immediately obvious from the formula.</p>
+<pre class="r"><code>library(tidyverse)
+## create a domain
+x&lt;- c(-4:4)
+df&lt;-data.frame(x)
+
+# write a function that gives a logistic function with parameter a
+map_logit &lt;- function(a,color,s){
+  stat_function(fun=function(x) (exp(a*x)/(1 + exp(a*x) )),
+                color=color,
+                size=1.05)
+}
+# plot the curves
+ggplot(df,aes(x))+
+  map_logit(1,&quot;black&quot;) +
+  map_logit(0.5,&quot;blue&quot;) +
+  map_logit(3,&quot;red&quot;) +
+  labs(
+    x = quote(theta),
+    y = &quot;P(X=1)&quot;
+  )</code></pre>
+<p><img src="/post/2021-04-21-mixing-up-math-item-response-theory-part-3/index.en_files/figure-html/unnamed-chunk-1-1.png" width="672" /></p>
+<p>The practical interpretation that we can give is that a bigger <span class="math inline">\(\alpha\)</span> means a test item is more sensitive to difference in ability level <span class="math inline">\(\theta\)</span> where it is steep. After all, for the red curve a tiny increase in <span class="math inline">\(\theta\)</span> around the average values gives a significant boost to the probability of a correct answer on the item. However, as we move two standard deviations away from the average of <span class="math inline">\(\theta\)</span>, the red curve doesn’t do much discrimination any more.</p>
+<p>We could also add a parameter <span class="math inline">\(\gamma\)</span> as a translation (0,<span class="math inline">\(\gamma\)</span>) in order to account for guessing, but as we aren’t dealing with multiple choice in the Rohrer test, we won’t consider it here. Because we have two parameters in our model - <span class="math inline">\(\alpha_i\)</span> and <span class="math inline">\(\delta_i\)</span> - we refer to it as a 2PL model.</p>
+<style>
+p.comment {
+background-color: #DBDBDB;
+padding: 10px;
+border: 1px solid black;
+margin-left: 25px;
+border-radius: 5px;
+font-style: italic;
+}
+
+</style>
+<div class="alert alert-info">
+<p><strong>Technical note</strong></p>
+<p>Estimating latent ability scores is a challenge. Let’s have a look at the 2PL model - a logistic model, where we want to estimate the probability of a correct answer given the latent ability and two parameters.</p>
+<p><span class="math display">\[ P(X_i=1|\theta, \alpha,\delta) = \frac{\exp[\alpha_i(\theta - \delta_i)]}{1 + \exp[\alpha_i(\theta-\delta_i)]}\]</span>
+The maximum likelihood of <span class="math inline">\(\theta\)</span> given the item responses X per person v and item i (where we have J items), is estimated with the following formula. Here <span class="math inline">\(\phi\)</span> contains both <span class="math inline">\(\delta\)</span> and <span class="math inline">\(\alpha\)</span>.</p>
+<p><span class="math display">\[L_i(\theta|x_v,\phi) = \prod_{i=1}^J P({X_{vi}=x_{vi}|\theta_{vi},\phi_i})\]</span></p>
+<p>There surely are a lot of parameters to estimate! So how to go about this? There are several methods.</p>
+<p>One is so called <em>joint maximum likelihood</em> estimation. In that case we search for combinations of <span class="math inline">\(\theta\)</span>, <span class="math inline">\(\delta\)</span> and <span class="math inline">\(\alpha\)</span> that produce a surface ‘above’ them, which gives values of p that maximize the likelihood of all of the {0,1} responses on the test. There is no unique solution to this maximization problem. The technical term is to say that the model is not identified. In order to remedy this shortcoming, the location of a parameter must be fixed and the scale must be fixed. Unfortunately, the resulting estimate is not consistent. This is a technical term that says that no matter how many observations you collect, your estimate is not guaranteed to approach the actual value you are after.</p>
+<p>Another solution to estimating parameters on a multivariate distribution is <em>marginal maximum likelihood</em> estimation. Taking the marginal of a multivariate distribution means that you collapse one axis onto the others, so that the probability mass is spread out over this lower dimensional shape. So if we have a two dimensional support below a surface for example, then taking the marginal means that the 3d-object with volume 1 (because of the total probability) is turned into a surface with area 1.</p>
+<p>This is what we do here with respect to <span class="math inline">\(\theta\)</span>, the latent abilities of the students. The problem is that we cannot integrate out an unknown function. So we have a choice. We either set up some nonparametric distribution for <span class="math inline">\(\theta\)</span> that we like, or we come up with some parametric distribution for <span class="math inline">\(\theta\)</span> that we like. The standard choice is to choose the normal distribution, with mean 0 and standard deviation 1. Now that <span class="math inline">\(\theta\)</span> is gone (for now), we can estimate the maximum likelihood of <span class="math inline">\(phi\)</span> per test item, based on the data of the students v.</p>
+<p><span class="math display">\[L(\phi|X) = \prod_{v} P(x_v|\phi)\]</span>
+This method requires numerical methods to both integrate and maximize the likelihood. See <a href="https://www.jstatsoft.org/article/view/v048i06">here</a> for more details on the algorithm used in the <code>mirt</code> package that is dedicated to IRT analyses and is used below.</p>
+<p>At this point we will not discuss another alternative, which are Bayesian estimation techniques. See <a href="https://arxiv.org/abs/1905.09501">here</a> for a guide.</p>
+<p>Once we have estimated the parameters, we find for each person the <span class="math inline">\(\theta\)</span> that maximizes the likelihood of their response pattern on the test (i.e. the 0’s and 1’s). The parameters <span class="math inline">\(phi\)</span> are already estimated and can now weight the contribution of each item to the estimate of the total latent ability level. In the formula below, P stands for the probability that person v gives a correct answer u on item i.</p>
+<p><span class="math display">\[L(\theta_s|X_v) = \prod_{i=1}^J P_{vi}^{u_{vi}}(1-P_{vi})^{1-u_{vi}}\]</span>
+Note that a high discrimination <span class="math inline">\(alpha\)</span> will punish a strongly deviating overall <span class="math inline">\(\theta\)</span> estimate more harshly, because the probability on the y-axis reacts stronger. So a high <span class="math inline">\(alpha\)</span> will give more weight to an item.</p>
+<p>We can also estimate the standard error for an estimate with the so called information function. This is the familiar Fisher information matrix adapted to account for <span class="math inline">\(alpha\)</span> and <span class="math inline">\(\gamma\)</span>, which both influence the sensitivity of the test. For our purposes we fill in <span class="math inline">\(\gamma\)</span>=0, because we use the 2PL model.</p>
+<p><span class="math display">\[Inf_i(\theta) = \left[\alpha_i^2\frac{1-P_i(\theta)}{P_i(\theta)}\right]\left[\frac{P_i(\theta)-\gamma_i}{1-\gamma_i}\right]^2\]</span>
+We can simply add up the information per item to get the test information function - variances can be added after all.
+<span class="math display">\[TInf(\theta) = \sum_{i=1}^I Inf_i(\theta)\]</span>
+Finally, the standard error is calculated by inverting the square root of the test information function. This should be familiar stuff.
+<span class="math display">\[SE(\theta) = \frac{1}{\sqrt{TInf(\theta)}}\]</span></p>
+</div>
+</div>
+<div id="analysis-of-the-test" class="section level2">
+<h2>Analysis of the Test</h2>
+<p>Let us now apply the IRT model to the responses on the 16 test items in the Rohrer study. After loading the package <code>mirt</code> and the data, we fit a 2PL model to the data. We plot the graphs for each of the 16 items to check whether our parameters lead to models that fit the data. The data are {0,1} so the dots are binned data, with 95% confidence intervals around them.</p>
+<pre class="r"><code># Fit a 1-dim model 
+fit1 &lt;- mirt(quest,
+             1,                 
+             itemtype = &#39;2PL&#39;)</code></pre>
+<pre class="r"><code># Plot the fit of the models
+for (i in 1:length(quest)){
+  ItemPlot &lt;- itemfit(fit1,
+                      group.bins = 15,
+                      empirical.plot = i,
+                      empirical.CI = .95,
+                      method = &#39;ML&#39;)
+  print(ItemPlot)
+}</code></pre>
+<p><img src="/post/2021-04-21-mixing-up-math-item-response-theory-part-3/index.en_files/figure-html/unnamed-chunk-4-1.png" width="672" /><img src="/post/2021-04-21-mixing-up-math-item-response-theory-part-3/index.en_files/figure-html/unnamed-chunk-4-2.png" width="672" /><img src="/post/2021-04-21-mixing-up-math-item-response-theory-part-3/index.en_files/figure-html/unnamed-chunk-4-3.png" width="672" /><img src="/post/2021-04-21-mixing-up-math-item-response-theory-part-3/index.en_files/figure-html/unnamed-chunk-4-4.png" width="672" /><img src="/post/2021-04-21-mixing-up-math-item-response-theory-part-3/index.en_files/figure-html/unnamed-chunk-4-5.png" width="672" /><img src="/post/2021-04-21-mixing-up-math-item-response-theory-part-3/index.en_files/figure-html/unnamed-chunk-4-6.png" width="672" /><img src="/post/2021-04-21-mixing-up-math-item-response-theory-part-3/index.en_files/figure-html/unnamed-chunk-4-7.png" width="672" /><img src="/post/2021-04-21-mixing-up-math-item-response-theory-part-3/index.en_files/figure-html/unnamed-chunk-4-8.png" width="672" /><img src="/post/2021-04-21-mixing-up-math-item-response-theory-part-3/index.en_files/figure-html/unnamed-chunk-4-9.png" width="672" /><img src="/post/2021-04-21-mixing-up-math-item-response-theory-part-3/index.en_files/figure-html/unnamed-chunk-4-10.png" width="672" /><img src="/post/2021-04-21-mixing-up-math-item-response-theory-part-3/index.en_files/figure-html/unnamed-chunk-4-11.png" width="672" /><img src="/post/2021-04-21-mixing-up-math-item-response-theory-part-3/index.en_files/figure-html/unnamed-chunk-4-12.png" width="672" /><img src="/post/2021-04-21-mixing-up-math-item-response-theory-part-3/index.en_files/figure-html/unnamed-chunk-4-13.png" width="672" /><img src="/post/2021-04-21-mixing-up-math-item-response-theory-part-3/index.en_files/figure-html/unnamed-chunk-4-14.png" width="672" /><img src="/post/2021-04-21-mixing-up-math-item-response-theory-part-3/index.en_files/figure-html/unnamed-chunk-4-15.png" width="672" /><img src="/post/2021-04-21-mixing-up-math-item-response-theory-part-3/index.en_files/figure-html/unnamed-chunk-4-16.png" width="672" />
+First of all, the estimated models appear to fit the data reasonably well. Second, we note that questions 1-4 give an humongous amount of information for students around <span class="math inline">\(\theta\)</span> = 0.2, but very little for students lower or higher in the scale. In other words, the discrimination for questions 1-4 is extreme - that is, <span class="math inline">\(\alpha\)</span> must be very high for these questions. We pull out the <span class="math inline">\(\alpha\)</span> parameters to confirm this observation.</p>
+<pre class="r"><code>fit1_coefs &lt;- coef(fit1, 
+                   simplify=T,
+                   IRTpars=T)
+
+latent_scores &lt;- as.vector(fscores(fit1))</code></pre>
+<pre class="r"><code>print(fit1_coefs$items[,1])</code></pre>
+<pre><code>##        G1        G2        G3        G4        I1        I2        I3        I4 
+## 19.986196 28.201574 31.570392 30.585809  1.771157  1.521330  1.837990  1.682591 
+##        E1        E2        E3        E4        C1        C2        C3        C4 
+##  1.416098  1.534383  1.062528  1.333830  1.036982  1.171095  1.032342  1.171904</code></pre>
+<p>The first four values of <span class="math inline">\(\alpha\)</span> indeed dwarf the others.</p>
+<p>Next, we plot a so called Wright Map, which plots the item difficulty as dots together with a histogram containing the average <span class="math inline">\(\theta\)</span> scores of the students on the left. The 16 values of the dots are displayed in a table below as well.</p>
+<pre class="r"><code>wrightMap(latent_scores, fit1_coefs$items[,2])</code></pre>
+<p><img src="/post/2021-04-21-mixing-up-math-item-response-theory-part-3/index.en_files/figure-html/unnamed-chunk-7-1.png" width="672" /></p>
+<pre><code>##            [,1]
+## G1  0.326588911
+## G2  0.314661307
+## G3  0.326976070
+## G4  0.328789665
+## I1 -0.244611823
+## I2 -0.031869313
+## I3 -0.267937550
+## I4 -0.128697944
+## E1  0.555965627
+## E2  0.487270267
+## E3  0.333455121
+## E4  0.526004490
+## C1 -0.925990531
+## C2 -0.009478124
+## C3 -0.817776980
+## C4  0.006975076</code></pre>
+<p>We see that the average <span class="math inline">\(\theta\)</span> scores of students are pretty uniformly distributed. The item difficulty is clumped in the center though. This is probably what Rohrer and his team intended. The questions are unambiguous and all test a basic level of understanding. As a first field test of interleaving in math, it makes sense to start with basic questions to reduce noise. Whether interleaving benefits higher level problem solving, where several pieces of information must be integrated, can be investigated later. This observation has consequences for the interpretation of the study results though.</p>
+<p>Next, we want to get a feel for the information that each of the items contributes. We therefore plot the item information function.</p>
+<pre class="r"><code>plot(fit1, type=&#39;infotrace&#39;)</code></pre>
+<p><img src="/post/2021-04-21-mixing-up-math-item-response-theory-part-3/index.en_files/figure-html/unnamed-chunk-8-1.png" width="672" /></p>
+<p>We only see the information curve for the first four items G1-G4, because their curves are so extremely steep. We therefore adjust the scale on the y-axis to get a better picture of the contribution of the other items.</p>
+<pre class="r"><code>plot(fit1, type=&#39;infotrace&#39;,ylim=c(0,1))</code></pre>
+<p><img src="/post/2021-04-21-mixing-up-math-item-response-theory-part-3/index.en_files/figure-html/unnamed-chunk-9-1.png" width="672" />
+As the test information function simply sums the item information functions, it makes sense to plot the latter in one graph. We see the contribution of each item, given the level of <span class="math inline">\(\theta\)</span>, where we of course note that the extreme contribution of the first four items for central values of <span class="math inline">\(\theta\)</span> are cut off again.</p>
+<pre class="r"><code>plot(fit1, type=&#39;infotrace&#39;, facet_items=F,ylim=c(0,1))</code></pre>
+<p><img src="/post/2021-04-21-mixing-up-math-item-response-theory-part-3/index.en_files/figure-html/unnamed-chunk-10-1.png" width="672" /></p>
+<p>We are now ready to plot the standard error, given a level of <span class="math inline">\(\theta\)</span>. The blue graph displays the information but only shows the contribution of the first four items because the scale is so large.</p>
+<pre class="r"><code>plot(fit1, type=&#39;infoSE&#39;)</code></pre>
+<p><img src="/post/2021-04-21-mixing-up-math-item-response-theory-part-3/index.en_files/figure-html/unnamed-chunk-11-1.png" width="672" />
+This is a plot that comes with the <code>mirt</code> package, like all of the others. I am not sure whether double y-axis are ever a good idea, but here it is instructive at least to see the relation between the information and the standard error. We note that standard errors are extremely small for students with average <span class="math inline">\(\theta\)</span> latent ability levels, but rather quickly go up as we move up or down the ability scale.</p>
+<p>So what have we gained by using IRT? To begin to answer this question, we plot the latent ability scores against the standardized sum of points scored on the test.</p>
+<pre class="r"><code>rohrer_irt &lt;- rohrer %&gt;% mutate(irt =latent_scores,
+                                total = rowSums(.[grep(&quot;[A-Z]+[1-4]&quot;, names(.))]),
+                                stand_total = (total - mean(total))/sd(total[Group == &quot;block&quot;]))
+
+rohrer_irt %&gt;% ggplot(aes(x=stand_total, y=irt)) + 
+  geom_point() +
+  labs(x = &quot;raw point score&quot;,
+    y = quote(theta))</code></pre>
+<p><img src="/post/2021-04-21-mixing-up-math-item-response-theory-part-3/index.en_files/figure-html/unnamed-chunk-12-1.png" width="672" />
+We notice a correlation, but also observe that the IRT model pulls <span class="math inline">\(\theta\)</span> scores to the center. Why does it do so? The reason is that the extreme <span class="math inline">\(\alpha\)</span> values of the first four items punish deviations from the mean difficulty of <span class="math inline">\(\theta\)</span> for these items very harshly. And the mean <span class="math inline">\(\theta\)</span> for these items is close to the average difficulty. If we leave out the first four items, the score align nicely again.</p>
+<pre class="r"><code>quest2 &lt;- rohrer %&gt;% select(I1:C4) %&gt;% 
+  as.data.frame()
+
+fit2 &lt;- mirt(quest2,
+             1,                  
+             itemtype = &#39;2PL&#39;)
+
+latent_scores2 &lt;- as.vector(fscores(fit2))
+
+quest2 %&gt;% 
+  mutate(irt =latent_scores2,
+                                total = rowSums(.[grep(&quot;[A-Z]+[1-4]&quot;, names(.))]),
+                                stand_total = (total - mean(total))/sd(total)) %&gt;% 
+  ggplot(aes(x=stand_total, y=irt)) + 
+  geom_point() + 
+  labs(x = &quot;raw point score&quot;,
+    y = quote(theta))</code></pre>
+<p><img src="/post/2021-04-21-mixing-up-math-item-response-theory-part-3/index.en_files/figure-html/unnamed-chunk-13-1.png" width="672" />
+So the IRT model can’t handle the first four question on the test. Visually we noted in the first post that the responses were binary - all wrong or all right. So it’s not that surprising that the IRT model has difficulty mapping them on a continuous scale. They shouldn’t be.</p>
+<p>Leaving out the first four items does mean we loose information though, as can be seen when we compare the plot of the standard errors with the plot of the standard error for the full model with all the items.</p>
+<pre class="r"><code>plot(fit2, type=&#39;infoSE&#39;)  </code></pre>
+<p><img src="/post/2021-04-21-mixing-up-math-item-response-theory-part-3/index.en_files/figure-html/unnamed-chunk-14-1.png" width="672" /></p>
+<p>A separate issue is whether we are justified in treating the <span class="math inline">\(\theta\)</span> scores as unidimensional. We knew this assumption was false, as four different domains were tested. This could all be explored with factor analysis, which we may do in a later post, which could result in the conclusion that there are really multiple abilities that are tested. But do we want to decouple solving equations from building a linear equation? We test math comprehensively and care about an integrated set of math abilities. Presumably, that is why we give a single final test and one mark. There is something to be said for both points of view, so it makes sense to pursue both lines of reasoning - one dimensional and multi dimensional analysis - in a subsequent post.</p>
+<p>Another question is how we can use IRT to estimate the difference between the two groups in the Rohrer study, which is what we are ultimately concerned with. This question will also be taken up in a future post.</p>
+</div>
