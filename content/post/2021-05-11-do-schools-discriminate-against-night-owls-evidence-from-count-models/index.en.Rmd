@@ -340,16 +340,35 @@ patch + plot_annotation(
 We observe that the model has too many residuals that are too big. The variance is higher in reality than the model accounts for. We already knew this by looking at the residual deviance. We say in such cases that the model is overdispersed. If so, we have a fix at our disposal, which is quasibinomial regression. This model adds a dispersion parameter $\omega$ > 1 (it was set to 1 in the standard binomial regression) so that more of the variance is accounted for. As we already fitted the quasibinomial models in earlier code, we can check the model fit right away. 
 
 ```{r}
-res_bin <- tibble("sick model" = NA, "late model" = NA, "removed model" = NA)
+disp_qbin <- tibble("sick model" = NA, "late model" = NA, "removed model" = NA)
 
 # loop such that the data is organized intelligible
 for (i in 4:6){
-  res_bin[,i-1] <- summary(models[[i]])$deviance
+  disp_qbin[,i-3] <- summary(models[[i]])$dispersion
 }
-res_bin
+disp_qbin
 ```
 
-The model fit has not changed in terms of deviance. Given the unsatisfying fit for even the model with the response with the lowest number of trials (days sick), we will give Poisson models a shot. 
+We note that the dispersion is higher than one for all three response variables. It makes sense then to account for the extra variance in the model. This has consequences for the standard errors.
+
+```{r}
+# create a tibble that organizes key data into a table
+table_qbin <- tibble(terms = c("intercept", "age", "sex", "MSF_sc"), "coef sick" = rep(NA,4),
+                    "se sick" = rep(NA,4),"coef late"=rep(NA,4),"se late"=rep(NA,4),
+                    "coef removed"=rep(NA,4),"se removed" =rep(NA,4))
+
+# loop such that the data is organized intelligible
+for (i in 1:3){
+  table_qbin[,(2*i)] <- summary(models[[i+3]])$coefficients[,1]
+  table_qbin[,2*i+1] <- summary(models[[i+3]])$coefficients[,2]
+}
+# print
+table_qbin 
+```
+
+For the days sick model, standard errors have doubled, while they also increased strongly for the other models. In some cases `age`and `sex` estimates have now been overwhelmed by their SE's, but not `MSF_sc`.
+
+Given the unsatisfying fit for even the model with the response with the lowest number of trials (days sick), we will give Poisson models a shot. 
 
 ### Poisson and Quasi-Poisson regression
 Let's start with some basics of the Poisson. It's PMF is given by
@@ -397,16 +416,45 @@ wrap_plots(plot_list) + plot_annotation(
 )
 ```
 
-Simulating from the Poisson shows that the model deviates from the response data for days sick in very much the same way as for the binomial. 
+The dispersion parameters of the quasipoisson confirm our hunch. 
 
-```{r warning=F,message=F}
-
+```{r}
 # Loop poisson models
 p_models <-list()
 for (i in 1:3){
   p_models[[i]] <- glm_model(att_compl[[i]], "poisson")
   p_models[[i+3]] <- glm_model(att_compl[[i]], "quasipoisson")
 }
+
+disp_qp <- tibble("sick model" = NA, "late model" = NA, "removed model" = NA)
+
+# loop such that the data is organized intelligible
+for (i in 4:6){
+  disp_qp[,i-3] <- summary(models[[i]])$dispersion
+}
+disp_qp
+```
+
+And so we use the quasi-poisson to estimate the standard error of our estimates.
+
+```{r}
+## SE's and est
+table_qp <- tibble(terms = c("intercept", "age", "sex", "MSF_sc"), "coef sick" = rep(NA,4),
+                   "se sick" = rep(NA,4),"coef late"=rep(NA,4),"se late"=rep(NA,4),
+                   "coef removed"=rep(NA,4),"se removed" =rep(NA,4))
+
+# loop such that the data is organized intelligible
+for (i in 1:3){
+  table_qp[,(2*i)] <- summary(models[[i+3]])$coefficients[,1]
+  table_qp[,2*i+1] <- summary(models[[i+3]])$coefficients[,2]
+}
+# print
+table_qp 
+```
+
+Simulating from the Poisson shows that the model deviates from the response data for days sick in very much the same way as for the binomial. 
+
+```{r warning=F,message=F}
 
 p_sims <- list()
 for (i in 1:3){
@@ -483,6 +531,7 @@ patch_dist_p + plot_annotation(
 
 ```
 
-These graphs tell the same story as the residual plots for the binomial. The model overshoots more than we expect. We also note that the late for class and removed from class models, which have more trials, suffer less from this problem. The spikes to the left of zero of the Standard Normal are probably caused by the last two models missing the large amount of zeros in the data. 
-The quasi-poisson moved the residual deviance as little as in the case of the binomial (results not shown here). We therefore move on to the negative-binomial and zero-inflated models in the next post. 
+These graphs tell the same story as the residual plots for the binomial. The model overshoots more than we expect. We also note that the late for class and removed from class models, which have more trials, suffer less from this problem. The spikes to the left of zero of the Standard Normal are probably caused by the last two models missing the large amount of zeros in the data.
+
+We therefore move on to the negative-binomial and zero-inflated models in the next post. 
 
