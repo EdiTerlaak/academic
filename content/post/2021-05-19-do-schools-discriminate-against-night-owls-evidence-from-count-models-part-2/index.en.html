@@ -1,0 +1,209 @@
+---
+title: ' Do Schools Discriminate against Night Owls? Evidence from Count Models (part
+  2)'
+author: Edi Terlaak
+date: '2021-05-19'
+slug: do-schools-discriminate-against-night-owls-evidence-from-count-models-part-2
+categories: []
+tags: []
+subtitle: ''
+summary: ''
+authors: []
+lastmod: '2021-05-19T15:40:54+02:00'
+featured: no
+image:
+  caption: ''
+  focal_point: ''
+  preview_only: no
+projects: []
+---
+
+
+
+<p>We continue our journey of fitting count models to explain absenteeism based on the chronotype of students. We discussed binomial, quasi-binomial, poisson and quasi-poisson models and now move on to negative binomial, hurdle and zero inflated models. We then pause and ask how to select the best fitting model and what that even means.</p>
+<div id="negative-binomial-regression" class="section level3">
+<h3>Negative Binomial Regression</h3>
+<p>The name negative binomial is unfortunate, because the probability distribution is not a version of the binomial distribution, as one would expect. Rather, it is an extension of the geometric distribution, which counts the number of failures before a success occurs. The negative binomial (NB) extends this distribution in that it counts the number of failures until a specified number of successes occur.</p>
+<p>A note of caution is in order here. There are a number of conventions and notations floating around regarding both the geometric and the NB. Depending on the problem, p can be defined as the probability of success or failure for example. For our purposes it makes sense to count the number of successes when we work with the NB. In that way, we can for example model the number of times a student called in sick.</p>
+<p>The PDF of the NB models the number of successes y, given the probability of success p and and number of failures r.</p>
+<p><span class="math display">\[ PDF(y; p, r) = \frac{(y_i + r-1)!}{y_i!(r - 1)!}p^{y}(1 – p)^{r} \]</span>
+When we stare at this formula for a while, it starts to make sense. The fraction gives the combination of all sequences of success and failure until the y-th success (hence the -1 in the numerator and the denominator; we don’t count the final success since it is fixed).</p>
+<p>Before we calculate the log-likelihood, we substitute r and p with expressions that foster interpretation. To this end we use the mean <span class="math inline">\(\mu\)</span> of the NB. As the mean of the geometric is <span class="math inline">\(\frac{p}{1-p}\)</span>, the mean of the NB is <span class="math inline">\(\mu=r\cdot\frac{p}{1-p}\)</span>, where r is the number of failures.</p>
+<p>This gives <span class="math inline">\(p=\frac{\mu}{\mu+r}\)</span> and <span class="math inline">\(1-p=\frac{r}{\mu+r}\)</span>. Moreover, r is often parameterized as <span class="math inline">\(r=\frac{1}{\alpha}\)</span>, where either <span class="math inline">\(\alpha\)</span> or <span class="math inline">\(\frac{1}{\alpha}\)</span> is called the dispersion parameter, depending on the convention.</p>
+<p>When we plug these parameters in the PDF, then calculate the likelihood and take the log, we get</p>
+<p><span class="math display">\[ \mathcal{L}(\mu; y, \alpha) = \sum_{i=1}^{n}y_i ln\left(\frac{\alpha\mu_i}{1 + \alpha\mu_i}\right)-\frac{1}{\alpha}ln(1 + \alpha\mu_i) + ln\Gamma(y_i + \frac{1}{\alpha})-ln\Gamma(y_i + 1) – ln\Gamma(\frac{1}{\alpha})\]</span>
+This required some algebra. Note that <span class="math inline">\(\Gamma\)</span> refers to the <a href="https://youtu.be/Qjeswpm0cWY?t=473">gamma function</a>, which gives the the factorial for any number (not just integers) minus one (for historical reasons).</p>
+<p>How does this model help deal with the overdispersion of the Poisson? Well, the Poisson lacked flexibility in that the variance equals the mean. For the NB, the variance is equal to <span class="math inline">\(r\cdot\frac{p}{(1-p)^2}\)</span> which can be written as <span class="math inline">\(\frac{\mu^2}{r}+\mu\)</span>. So the variance does no longer depend only on <span class="math inline">\(\mu\)</span>, but also on an additional dispersion parameter r, which goes by several names unfortunately. What follows is going to sound confusing, but is all due to the profusion of notations in count models.</p>
+<p>In the formula above, r is parameterized as <span class="math inline">\(\frac{1}{\alpha}\)</span>, but the R packages we will use for our calculations spit out r as the dispersion parameter and call it <span class="math inline">\(\theta\)</span>. The R packages are unique in this regard. Other software packages use the direct parameterization <span class="math inline">\(\frac{1}{\alpha}\)</span>. The story behind this historical accident can be read <a href="https://stats.stackexchange.com/questions/10419/what-is-theta-in-a-negative-binomial-regression-fitted-with-r/">here</a>.</p>
+<p>Let’s finally run the NB model and see if it gets us anywhere. There is no reason to believe that the number of days one calls in sick would be particularly well described by counting the number of failures before a set number of successes occurs. However, as we set out above, the negative binomial has a separate parameter for the variance different from the mean, which allows it to deal better with overdispersed data. We run the NB for days sick here, and repeat the analysis for the other response variables later.</p>
+<pre class="r"><code>summary(m1_nb &lt;- glm.nb(`Sick frequency 2013-2014` ~ MSF_sc + age + sex, 
+                        data = att))</code></pre>
+<pre><code>## 
+## Call:
+## glm.nb(formula = `Sick frequency 2013-2014` ~ MSF_sc + age + 
+##     sex, data = att, init.theta = 1.182071839, link = log)
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -1.7965  -1.4698  -0.3954   0.3332   4.0122  
+## 
+## Coefficients:
+##             Estimate Std. Error z value Pr(&gt;|z|)  
+## (Intercept) -0.32957    0.75277  -0.438   0.6615  
+## MSF_sc       0.12167    0.05311   2.291   0.0220 *
+## age          0.05941    0.06011   0.988   0.3230  
+## sex         -0.20382    0.11074  -1.840   0.0657 .
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## (Dispersion parameter for Negative Binomial(1.1821) family taken to be 1)
+## 
+##     Null deviance: 474.81  on 423  degrees of freedom
+## Residual deviance: 463.67  on 420  degrees of freedom
+##   (16 observations deleted due to missingness)
+## AIC: 1749.6
+## 
+## Number of Fisher Scoring iterations: 1
+## 
+## 
+##               Theta:  1.182 
+##           Std. Err.:  0.133 
+## 
+##  2 x log-likelihood:  -1739.613</code></pre>
+<p>We note that the residual deviance is pretty close to the degrees of freedom, which suggests we have better model fit than in the case of the Poisson and the Binomial. Turning to the standard errors, there may be an effect of <code>sex</code> on days sick, but the effect of chronotype is clearer still. Given the estimate for <code>MSF_sc</code> of 0.12, we exponentiate (to undo the log link) to get 1.13. This means that for every extra unit of <code>MSF_sc</code> the number of days sick goes up by about 13%. That in turn means that if the midpoint of one’s natural sleeping times goes up by 1 hour (<code>MSF_sc</code> increases by 1), a student is expected to call in sick 13% more often.</p>
+<p>Let’s have a look at the residuals as well.</p>
+<pre class="r"><code>qqrplot(m1_nb)</code></pre>
+<p><img src="{{< blogdown/postref >}}index.en_files/figure-html/unnamed-chunk-3-1.png" width="672" /></p>
+<p>The qq-plot shows that residuals do not diverge from normality too badly, unlike for example the Poisson, for which we plotted the standardized residuals with the standard normal at the end of the previous post. We look at the other response variables later. Although we are doing better, we may increase model fit further still by considering another class of models.</p>
+</div>
+<div id="zero-inflated-and-hurdle-models" class="section level3">
+<h3>Zero-inflated and hurdle models</h3>
+<p>As we explored the data visually in part 1, we noted that the response variables contain a lot of zeros. Indeed, as we visually explored the residuals of the binomial, the Poisson and the negative binomial, we noted that all these models underestimate the number of zeros in the data. For such situations, we can make use of zero-inflated or hurdle models.</p>
+<p>Both models think that the process that generates the data has two parts to it. One part determines whether there is something to count in the first place, while the other part does the counting. The difference between the models is that hurdle models treat these two parts as strictly separate. One part models the zeros, while the other part models only strictly positive counts (this means that the probability distribution is truncated so that they exclude zero). By contrast, in zero-inflated models, the second part can still model zeros (so it isn’t truncated at zero).</p>
+<p>For both approaches different models can be used for each part. So the {0,1} part of the model (whether there is something to count or not) could be modeled with a logistic regression model, while the second part could be modeled by a negative binomial or a Poisson.</p>
+<p>The story of these models makes sense in the context of absenteeism in schools. At least we can make up a story where one process determines whether a student gets sick or not, and another process determines whether a students decides to stay home, given the sickness. Similarly, students may pass a kind of normative threshold where they are morally ok with being sent out of class, after which a second process determines the count of dismissals (where this second process only has an effect on dismissals after the normative threshold is passed). Something similar could be at work for being late, although the story is less convincing in that case.</p>
+<p>We will run these models in a moment, together with the previous models. This then raises the questions of how to compare all these models. So let’s discuss that problem first.</p>
+</div>
+<div id="geocentric-model-evaluation" class="section level2">
+<h2>Geocentric Model Evaluation</h2>
+<p>In one of his great metaphors Richard McElreath <a href="https://www.youtube.com/watch?v=h5aPo5wXN8E&amp;list=PLDcUM9US4XdNM4Edgs7weiyIguLSToZRI&amp;index=3">compares</a> fitting GLM’s to ancient geometers determining the position of heavenly objects based on their observations from earth. Their models predicted the positions of the planets from their point of view against the night sky reasonably well. Hence McElreath refers to these models as ‘geocentric’. However, sending a rocket to their predicted coordinates would get you nowhere. So it is with GLM’s. We don’t understand the process we’re modeling, so we fit a bunch of models and look at indicators of fit until we are satisfied.</p>
+<p>By contrast, the principled way to go about modeling is to avoid the standard link functions of GLM’s and come up with a relation between variables based on science. Another approach would be to draw out DAGs (Directed Acyclic Graphs) that chart the causal relations between variables. In our case, we don’t have a scientific theory that relates chronotype to absenteeism and there are not enough variables in the data set to draw a meaningful DAG. We will therefore be content with ‘geocentric’ modeling for now.</p>
+<p>Broadly speaking, there are two ways to evaluate ‘geocentric’ model fit. The first looks at the data that we have and checks how well the model predicts the outcome variable. The second asks how the model would fare if we got new data from the same data generating process. We could do that by splitting up the initial data set, for example.</p>
+<p>We will evaluate model fit using the first approach. We will do so by using information theory and then by visual inspection of how well specified the model is. The second approach is known as cross validation and will not be pursued here.</p>
+<div id="aic" class="section level3">
+<h3>AIC</h3>
+<p>The Akaiki Information Criterion (AIC) is closely related to measures of deviance we already discussed in the previous post. It adds a twist though. It takes the -2 log-likelihood that we saw already. We wanted this value to be as low as possible. The AIC adds a penalty term 2k to this value, where k is the number of estimated parameters in the model.</p>
+<p><span class="math display">\[ AIC = -\ 2\mathcal{L}\ + \ 2k\]</span>
+Although there is a lot more to say about this formula, it makes sense intuitively. As we add more parameters to a model so that we have one parameter for every data point, we can fit the data perfectly. That doesn’t mean the model is useful however, because if new data comes in, the model is likely to do poorly. It fits the sample, not the underlying process. It makes sense then to penalize the model for adding parameters.</p>
+<p>Let’s cycle through all the models and see how they fare by this criterion. Note that since we use the same data for all the models, it makes sense to compare their likelihood values (via the AIC).</p>
+<pre class="r"><code>b_models &lt;-list()
+p_models &lt;-list()
+nb_models &lt;- list()
+zi_p_models &lt;- list()
+zi_nb_models &lt;- list()
+hnb_models &lt;- list()
+
+for (i in 1:3){
+  b_models[[i]] &lt;- glm(att_compl[[14+i]] ~ age + sex + MSF_sc, 
+                          data = att_compl, family=&#39;binomial&#39;)
+  p_models[[i]] &lt;- glm(att_compl[[i]] ~ age + sex + MSF_sc, 
+                       data = att_compl, family= &quot;poisson&quot;)
+  nb_models[[i]] &lt;- glm.nb(att_compl[[i]] ~ age + sex + MSF_sc, 
+                data = att)
+  zi_p_models[[i]] &lt;- zeroinfl(att_compl[[i]] ~ MSF_sc + age + sex| MSF_sc + age + sex,
+                            data = att, dist = &quot;poisson&quot;)
+  zi_nb_models[[i]] &lt;- zeroinfl(att_compl[[i]] ~ MSF_sc + age + sex| MSF_sc + age + sex,
+                            data = att, dist = &quot;negbin&quot;)
+  hnb_models[[i]] &lt;- hurdle(att_compl[[i]] ~ MSF_sc + age + sex| MSF_sc + age + sex,
+                     data = att, dist = &quot;negbin&quot;)
+}
+
+AIC_scores &lt;- list()
+for (i in 1:3){
+AIC_scores[[i]] &lt;- AIC(b_models[[i]],p_models[[i]], nb_models[[i]], zi_p_models[[i]], 
+                       zi_nb_models[[i]], hnb_models[[i]]) %&gt;% 
+                          mutate(models=c(&quot;Binomial&quot;, &quot;Poisson&quot;, &quot;Negative Binomial&quot;, &quot;Zero-inflated Poisson&quot;,
+                                          &quot;Zero-Inflated Negative Binomial&quot;, &quot;Hurdle Negative Binomial&quot;)) %&gt;% 
+                              relocate(models)
+
+}
+
+AIC_scores[[1]] </code></pre>
+<pre><code>##                            models df      AIC
+## 1                        Binomial  4 2139.656
+## 2                         Poisson  4 2122.892
+## 3               Negative Binomial  5 1749.613
+## 4           Zero-inflated Poisson  8 1975.229
+## 5 Zero-Inflated Negative Binomial  9 1755.818
+## 6        Hurdle Negative Binomial  9 1748.674</code></pre>
+<p>We see that for the days sick response variable, the AIC really doesn’t like the Binomial and Poisson models compared to the others. The negative binomial does very well though, while a hurdle model does slightly better.</p>
+<pre class="r"><code>AIC_scores[[2]] </code></pre>
+<pre><code>##                            models df      AIC
+## 1                        Binomial  4 1252.417
+## 2                         Poisson  4 1252.063
+## 3               Negative Binomial  5 1145.650
+## 4           Zero-inflated Poisson  8 1160.118
+## 5 Zero-Inflated Negative Binomial  9 1145.115
+## 6        Hurdle Negative Binomial  9 1145.255</code></pre>
+<pre class="r"><code>AIC_scores[[3]] </code></pre>
+<pre><code>##                            models df       AIC
+## 1                        Binomial  4 1018.5935
+## 2                         Poisson  4 1018.2158
+## 3               Negative Binomial  5  839.1693
+## 4           Zero-inflated Poisson  8  861.5753
+## 5 Zero-Inflated Negative Binomial  9  829.1255
+## 6        Hurdle Negative Binomial  9  840.3242</code></pre>
+<p>For the late for class case, we get broadly the same picture. Now it’s the zero-inflated model that narrowly beats the negative binomial. For the dismissed from class case, the zero-inflated model outperforms the negative binomial by a bit more.</p>
+<p>It is unsatisfactory to decide on the best model by, basically, staring at negative log-likelihoods (in the AIC). We would like to see how well the model fits data. Moreover, likelihood (and by implication the AIC) doesn’t tell us anything about model fit on its own. The number by itself is meaningless. We can compare likelihoods to see whether one model is better than another, but these could be small differences among models that are all horrible fits. For these reasons we will now also visualize model fit.</p>
+</div>
+<div id="visual-check-of-model-fit" class="section level3">
+<h3>Visual check of model fit</h3>
+<p>To this end we use the <code>countreg</code> package, which makes interesting plots of model fit for count models.</p>
+<p>On a technical note, Working with <code>countreg</code> plots is a bit annoying if we cycle through lots of models, because it produces base-R type plots. We can use the <code>ggplotify</code> package though to transform them into ggplot objects that we can work with more easily.</p>
+<p>We model days sick first.</p>
+<pre class="r"><code>b_plots &lt;- list()
+p_plots &lt;- list()
+nb_plots &lt;- list ()
+zi_p_plots &lt;- list()
+zi_nb_plots &lt;- list()
+hnb_plots &lt;- list()
+patch &lt;- list()
+
+for (i in 1:3){
+  b_plots[[i]] &lt;- as.ggplot(~countreg::rootogram(b_models[[i]], ylim = c(-5, 15), xlim= c(-1,12), xlab=&quot;&quot;)) +
+                      ggtitle(&quot;Binomial&quot;)
+  p_plots[[i]] &lt;- as.ggplot(~countreg::rootogram(p_models[[i]],  ylim = c(-5, 15), xlim= c(-1,12), xlab=&quot;&quot;)) +
+                      ggtitle(&quot;Poisson&quot;)
+  nb_plots[[i]] &lt;- as.ggplot(~countreg::rootogram(nb_models[[i]],  ylim = c(-5, 15), xlim= c(-1,12), xlab=&quot;&quot;)) +
+                      ggtitle(&quot;Negative Binomial&quot;)
+  zi_p_plots[[i]] &lt;- as.ggplot(~countreg::rootogram(zi_p_models[[i]], xlab=&quot;&quot;, main = &quot;ZIP&quot;, ylim = c(-5, 15), max = 15)) +
+                      ggtitle(&quot;Zero-inflated Poisson&quot;)
+  zi_nb_plots[[i]] &lt;- as.ggplot(~countreg::rootogram(zi_nb_models[[i]], xlab=&quot;&quot;, main = &quot;ZIP&quot;, ylim = c(-5, 15), max = 15)) +
+                      ggtitle(&quot;Zero-inflated Neg Binom&quot;)
+  hnb_plots[[i]] &lt;- as.ggplot(~countreg::rootogram(hnb_models[[i]], xlab=&quot;&quot;, main = &quot;HNB&quot;, ylim = c(-5, 15), max = 15)) +
+                      ggtitle(&quot;Hurdle Neg Binom&quot;)
+  patch[[i]] &lt;- (b_plots[[i]]+p_plots[[i]] + nb_plots[[i]]) / (zi_p_plots[[i]] + zi_nb_plots[[i]] + hnb_plots[[i]])
+}
+
+patch[[1]]  + plot_annotation(title=&quot;Days sick models&quot;,
+                              subtitle=&quot;Bars are the observed counts, which are matched with the red values of the model&quot;)</code></pre>
+<p><img src="{{< blogdown/postref >}}index.en_files/figure-html/unnamed-chunk-6-1.png" width="672" /></p>
+<p>In these graphs, the red dots are the model predictions. The bars are the data that are lined up with the dots, so that they may stick out at the bottom or hover above the x-axis. These cases would indicate poor model fit.</p>
+<p>The picture we get for the binomial and the Poisson is much the same as the one we saw in the previous post. These models overestimate medium counts and underestimate the rest. For days sick we also note that the negative binomial is doing very well, while the hurdle and zero-inflated variants do even better.</p>
+<p>Let’s look at the models for late for class and dismissed from class all at once.</p>
+<pre class="r"><code>patch[[2]]  + plot_annotation(title=&quot;Late for class models&quot;,
+                              subtitle=&quot;Bars are the observed counts, which are matched with the red values of the model&quot;)</code></pre>
+<p><img src="{{< blogdown/postref >}}index.en_files/figure-html/unnamed-chunk-7-1.png" width="672" /></p>
+<pre class="r"><code>patch[[3]]  + plot_annotation(title=&quot;Removed from class models&quot;,
+                              subtitle=&quot;Bars are the observed counts, which are matched with the red values of the model&quot;)</code></pre>
+<p><img src="{{< blogdown/postref >}}index.en_files/figure-html/unnamed-chunk-7-2.png" width="672" /></p>
+<p>For the late for class and dismissed from class models, it is hard to detect a difference between the negative binomial model on the one hand and the zero-inflated and hurdle binomials on the other.</p>
+</div>
+</div>
+<div id="interpretation" class="section level2">
+<h2>Interpretation</h2>
+<p>So which model do we choose? Both in terms of AIC scores and visual checks of model fit, there is not much reason to choose a zero-inflated or hurdle verion of the negative binomial over the regular negative binomial. Parsimony would suggest the negative binomial will do just fine.</p>
+<p>So what does this model tell us? We already saw that increasing the natural midpoint of sleep by an hour increases days sick by 13%. The negative binomial estimate for late for class is 0.14, with standard error 0.069. For dismissed from class the estimate is 0.4 with standard error 0.069. This means, after exponentiating the estimates, that we expect every extra hour of the natural midpoint of sleep to lead to 15% more cases of students being late for class and 50% more dismissals from class.</p>
+<p>That seems like a lot, but we have to keep in mind that all cases of absenteeism are rare events. We need an idea of the impact of absenteeism on student welfare and grades (or a disruption of learning culture in a class) to assess whether a 50% percent increase in the number of dismissals (from rare to a bit less rare) is a lot.</p>
+<p>The language can be misleading here. By saying that we expect an increase of so many percent, we are implicitly making a causal claim. The research design isn’t set up for that job though. It’s the model that expects these increases in absenteeism. We need not believe this model, because it leaves out a lot. So many aspects of human psychology could be confounded with chronotype and absenteeism that the confidence in a causal link between the two should not be all that high. The results are suggestive though, so the hunt for (quasi-)experimental designs in this area should be opened.</p>
+</div>
