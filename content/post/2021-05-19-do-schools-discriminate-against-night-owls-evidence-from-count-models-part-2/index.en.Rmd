@@ -23,7 +23,6 @@ We continue our journey of fitting count models to explain absenteeism based on 
 ```{r echo=F, results=F, warning=F, message=F}
 library(naniar)
 library(tidyverse)
-library(MASS)
 library(pscl)
 library(patchwork)
 library(broom)
@@ -107,7 +106,7 @@ By contrast, the principled way to go about modeling is to avoid the standard li
 
 Broadly speaking, there are two ways to evaluate 'geocentric' model fit. The first looks at the data that we have and checks how well the model predicts the outcome variable. The second asks how the model would fare if we got new data from the same data generating process. We could do that by splitting up the initial data set, for example. 
 
-We will evaluate model fit using the first approach. We will do so by using information theory and then by visual inspection of how well specified the model is. The second approach is known as cross validation and will not be pursued here. 
+We will evaluate model fit then using information theory, visual inspection of model specification and finally cross validation. 
 
 ### AIC
 The Akaiki Information Criterion (AIC) is closely related to measures of deviance we already discussed in the previous post. It adds a twist though. It takes the -2 log-likelihood that we saw already. We wanted this value to be as low as possible. The AIC adds a penalty term 2k to this value, where k is the number of estimated parameters in the model.
@@ -219,14 +218,99 @@ patch[[3]]  + plot_annotation(title="Removed from class models",
 
 ```
 
-For the late for class and dismissed from class models, it is hard to detect a difference between the negative binomial model on the one hand and the zero-inflated and hurdle binomials on the other. 
+For the late for class and dismissed from class models, it is hard to detect a difference between the negative binomial model on the one hand and the zero-inflated and hurdle binomials on the other.
+
+### Cross validation
+A third method check the model by splitting the data set into a training set and a test set. The model is then built on the bases of the training data and has to proof itself on the test data set it has not seen before. A method that has a good track record is leave-on-out cross validation, in which this process is repeated many times leaving out one observation each time. This take a lot of processing power and hence time, but fortunately Andrew Gelman, Aki Vehtari and colleagues have worked out an optimization algorithm that is relatively fast and still performs well. This work is laid down in the `loo` package. It works for Bayesian models only, so we run the same likelihood models with standard `brms` priors. These models take a while to run, so we restrict the cross validation to the late for class response variable for convenience.  
+
+```{r warning=F, message=F}
+library(brms)
+library(loo)
+
+setwd("C:/R/edu/chronotypes")
+
+# finally give the vars reasonable names
+att <- att %>% mutate(late=`LA 1st 2013-2014`,
+                      sick_freq = `Sick frequency 2013-2014`,
+                      removed = `Removed 2013-2014`)
+# fit a negbin with brms to late for class
+br_nb_1 <- brm(data = att, 
+              family = negbinomial,
+              late ~ 1 + age + sex + MSF_sc,
+              iter = 2000, warmup = 1000, cores = 4, chains = 4,
+              seed = 12,
+              file = "fits/neg_binomial_late")
+
+br_pois_late <- brm(data = att, 
+               family = poisson(link="log"),
+               late ~ 1 + age + sex + MSF_sc,
+               iter = 2000, warmup = 1000, cores = 4, chains = 4,
+               seed = 12,
+               file = "fits/poisson_late")
+
+br_zi_nb_late <- brm(data = att, 
+                    family = zero_inflated_negbinomial(link = "log"),
+                    late ~ 1 + age + sex + MSF_sc,
+                    iter = 2000, warmup = 1000, cores = 4, chains = 4,
+                    seed = 12,
+                    file = "fits/zi_nb_late")
+
+br_hurdle_nb_late <- brm(data = att, 
+                     family = hurdle_negbinomial(link = "log"),
+                     late ~ 1 + age + sex + MSF_sc,
+                     iter = 2000, warmup = 1000, cores = 4, chains = 4,
+                     seed = 12,
+                     file = "fits/hurdle_nb_late")
+
+# models have been compared with loo() and are now loaded from disk for speed
+load("fits/loo_late")
+loo_late
+```
+
+At the bottom of the loo output we see that the first model `br_nb_1`, which is the negative binomial model, comes out on top. This doesn't mean much though, because the difference between the NB and the zero-inflated NB is overwhelmed by the standard error. Again, we find no reason in terms of model fit to prefer the zero-inflated or hurdle versions of the NB over the regular NB.
 
 ## Interpretation
-So which model do we choose? Both in terms of AIC scores and visual checks of model fit, there is not much reason to choose a zero-inflated or hurdle verion of the negative binomial over the regular negative binomial. Parsimony would suggest the negative binomial will do just fine. 
+So which model do we choose? Both in terms of AIC scores and visual checks of model fit, there is not much reason to choose a zero-inflated or hurdle verion of the negative binomial over the regular negative binomial. Parsimony would suggest the negative binomial will do just fine. We could still prefer the zero-inflated and hurdle models if we found the story behind picking these models particularly convincing. But I don't think they are. 
 
-So what does this model tell us? We already saw that increasing the natural midpoint of sleep by an hour increases days sick by 13%. The negative binomial estimate for late for class is `r round(nb_models[[2]]$coefficients[4],2)`, with standard error `r round(summary(nb_models[[2]])$coefficients[4,2],3)`. For dismissed from class the estimate is `r round(nb_models[[3]]$coefficients[4],2)` with standard error `r round(summary(nb_models[[2]])$coefficients[4,2],3)`. This means, after exponentiating the estimates, that we expect every extra hour of the natural midpoint of sleep to lead to 15% more cases of students being late for class and 50% more dismissals from class. 
+So what does this NB model tell us about chronotypes and absenteeism? We already saw that increasing the natural midpoint of sleep by an hour increases days sick by 13%. The negative binomial estimate for late for class is `r round(nb_models[[2]]$coefficients[4],2)`, with standard error `r round(summary(nb_models[[2]])$coefficients[4,2],3)`. For dismissed from class the estimate is `r round(nb_models[[3]]$coefficients[4],2)` with standard error `r round(summary(nb_models[[2]])$coefficients[4,2],3)`. This means, after exponentiating the estimates (to undo the log link), that we expect every extra hour of the natural midpoint of sleep to lead to 15% more cases of students being late for class and 50% more dismissals from class. 
 
-That seems like a lot, but we have to keep in mind that all cases of absenteeism are rare events. We need an idea of the impact of absenteeism on student welfare and grades (or a disruption of learning culture in a class) to assess whether a 50% percent increase in the number of dismissals (from rare to a bit less rare) is a lot.
+That seems like a lot, but we have to keep in mind that all cases of absenteeism are rare events. We need an idea of the impact of absenteeism on student welfare and grades (or a disruption of learning culture in a class) to assess whether a 50% percent increase in the number of dismissals (from rare to a bit less rare) is a lot. For perspective, let's plot the conditional effects of chronotype of the Bayesian models, while taking average values for the other variables. 
 
-The language can be misleading here. By saying that we expect an increase of so many percent, we are implicitly making a causal claim. The research design isn't set up for that job though. It's the model that expects these increases in absenteeism. We need not believe this model, because it leaves out a lot. So many aspects of human psychology could be confounded with chronotype and absenteeism that the confidence in a causal link between the two should not be all that high. The results are suggestive though, so the hunt for (quasi-)experimental designs in this area should be opened.  
+```{r warning=F, message=F}
+setwd("C:/R/edu/chronotypes")
+br_nb_rem <- brm(data = att, 
+               family = negbinomial,
+               removed ~ 1 + age + sex + MSF_sc,
+               iter = 2000, warmup = 1000, cores = 4, chains = 4,
+               seed = 12,
+               file = "fits/neg_binomial_rem")
+
+br_nb_sick <- brm(data = att, 
+                 family = negbinomial,
+                 sick_freq ~ 1 + age + sex + MSF_sc,
+                 iter = 2000, warmup = 1000, cores = 4, chains = 4,
+                 seed = 12,
+                 file = "fits/neg_binomial_sick")
+
+# plot effects of MSF
+br_p1 <- plot(conditional_effects(br_nb_sick, effects="MSF_sc"), plot = F)[[1]] + 
+            labs(x="", y= "frequency of sick") +
+            ylim(c(0,6))
+
+br_p2 <- plot(conditional_effects(br_nb_1, effects="MSF_sc"), plot = F)[[1]] + 
+  labs(x="", y= "late for class") +
+  ylim(c(0,6))
+
+br_p3 <- plot(conditional_effects(br_nb_rem, effects="MSF_sc"), plot = F)[[1]] + 
+  labs(x="chronotype", y= "removed from class") +
+  ylim(c(0,6))
+
+patch_brms <- (br_p1 / br_p2 / br_p3) + 
+  plot_annotation(title="Estimated effect of chronotype on absenteeism",
+                  subtitle="Bands are 95% credible intervals")
+patch_brms
+```
+Note that the bands are credible intervals. So they mean what a lot of people think confidence intervals mean: there is a probability associated with every possible estimate of chronotype inside the band. At every x value these estimates sum to 95% probability. In any case, these graphs of the absolute difference in absenteeism rather than the relative ones present a less spectacular picture of the influence of chronotype on absenteeism, even for the case of the 50% increase in dismissals. 
+
+Furthermore, the language can be misleading here. By saying that we expect an increase of so many percent, we are implicitly making a causal claim. The research design isn't set up for that job though. It's the model that expects these increases in absenteeism. We need not believe this model, because it leaves out a lot. That is, many aspects of human psychology could be confounded with chronotype and absenteeism, so that our confidence in a causal link between the two should not be all that high. The results are suggestive though, so the hunt for (quasi-)experimental designs in this area should be opened.  
 

@@ -18,6 +18,7 @@ image:
 projects: []
 ---
 
+<script src="{{< blogdown/postref >}}index.en_files/header-attrs/header-attrs.js"></script>
 
 
 <p>We continue our journey of fitting count models to explain absenteeism based on the chronotype of students. We discussed binomial, quasi-binomial, poisson and quasi-poisson models and now move on to negative binomial, hurdle and zero inflated models. We then pause and ask how to select the best fitting model and what that even means.</p>
@@ -89,7 +90,7 @@ This required some algebra. Note that <span class="math inline">\(\Gamma\)</span
 <p>In one of his great metaphors Richard McElreath <a href="https://www.youtube.com/watch?v=h5aPo5wXN8E&amp;list=PLDcUM9US4XdNM4Edgs7weiyIguLSToZRI&amp;index=3">compares</a> fitting GLM’s to ancient geometers determining the position of heavenly objects based on their observations from earth. Their models predicted the positions of the planets from their point of view against the night sky reasonably well. Hence McElreath refers to these models as ‘geocentric’. However, sending a rocket to their predicted coordinates would get you nowhere. So it is with GLM’s. We don’t understand the process we’re modeling, so we fit a bunch of models and look at indicators of fit until we are satisfied.</p>
 <p>By contrast, the principled way to go about modeling is to avoid the standard link functions of GLM’s and come up with a relation between variables based on science. Another approach would be to draw out DAGs (Directed Acyclic Graphs) that chart the causal relations between variables. In our case, we don’t have a scientific theory that relates chronotype to absenteeism and there are not enough variables in the data set to draw a meaningful DAG. We will therefore be content with ‘geocentric’ modeling for now.</p>
 <p>Broadly speaking, there are two ways to evaluate ‘geocentric’ model fit. The first looks at the data that we have and checks how well the model predicts the outcome variable. The second asks how the model would fare if we got new data from the same data generating process. We could do that by splitting up the initial data set, for example.</p>
-<p>We will evaluate model fit using the first approach. We will do so by using information theory and then by visual inspection of how well specified the model is. The second approach is known as cross validation and will not be pursued here.</p>
+<p>We will evaluate model fit then using information theory, visual inspection of model specification and finally cross validation.</p>
 <div id="aic" class="section level3">
 <h3>AIC</h3>
 <p>The Akaiki Information Criterion (AIC) is closely related to measures of deviance we already discussed in the previous post. It adds a twist though. It takes the -2 log-likelihood that we saw already. We wanted this value to be as low as possible. The AIC adds a penalty term 2k to this value, where k is the number of estimated parameters in the model.</p>
@@ -129,30 +130,30 @@ AIC_scores[[i]] &lt;- AIC(b_models[[i]],p_models[[i]], nb_models[[i]], zi_p_mode
 }
 
 AIC_scores[[1]] </code></pre>
-<pre><code>##                            models df      AIC
-## 1                        Binomial  4 2139.656
-## 2                         Poisson  4 2122.892
-## 3               Negative Binomial  5 1749.613
-## 4           Zero-inflated Poisson  8 1975.229
-## 5 Zero-Inflated Negative Binomial  9 1755.818
-## 6        Hurdle Negative Binomial  9 1748.674</code></pre>
+<pre><code>##                                            models df      AIC
+## b_models[[i]]                            Binomial  4 2139.656
+## p_models[[i]]                             Poisson  4 2122.892
+## nb_models[[i]]                  Negative Binomial  5 1749.613
+## zi_p_models[[i]]            Zero-inflated Poisson  8 1975.229
+## zi_nb_models[[i]] Zero-Inflated Negative Binomial  9 1755.818
+## hnb_models[[i]]          Hurdle Negative Binomial  9 1748.674</code></pre>
 <p>We see that for the days sick response variable, the AIC really doesn’t like the Binomial and Poisson models compared to the others. The negative binomial does very well though, while a hurdle model does slightly better.</p>
 <pre class="r"><code>AIC_scores[[2]] </code></pre>
-<pre><code>##                            models df      AIC
-## 1                        Binomial  4 1252.417
-## 2                         Poisson  4 1252.063
-## 3               Negative Binomial  5 1145.650
-## 4           Zero-inflated Poisson  8 1160.118
-## 5 Zero-Inflated Negative Binomial  9 1145.115
-## 6        Hurdle Negative Binomial  9 1145.255</code></pre>
+<pre><code>##                                            models df      AIC
+## b_models[[i]]                            Binomial  4 1252.417
+## p_models[[i]]                             Poisson  4 1252.063
+## nb_models[[i]]                  Negative Binomial  5 1145.650
+## zi_p_models[[i]]            Zero-inflated Poisson  8 1160.118
+## zi_nb_models[[i]] Zero-Inflated Negative Binomial  9 1145.115
+## hnb_models[[i]]          Hurdle Negative Binomial  9 1145.255</code></pre>
 <pre class="r"><code>AIC_scores[[3]] </code></pre>
-<pre><code>##                            models df       AIC
-## 1                        Binomial  4 1018.5935
-## 2                         Poisson  4 1018.2158
-## 3               Negative Binomial  5  839.1693
-## 4           Zero-inflated Poisson  8  861.5753
-## 5 Zero-Inflated Negative Binomial  9  829.1255
-## 6        Hurdle Negative Binomial  9  840.3242</code></pre>
+<pre><code>##                                            models df       AIC
+## b_models[[i]]                            Binomial  4 1018.5935
+## p_models[[i]]                             Poisson  4 1018.2158
+## nb_models[[i]]                  Negative Binomial  5  839.1693
+## zi_p_models[[i]]            Zero-inflated Poisson  8  861.5753
+## zi_nb_models[[i]] Zero-Inflated Negative Binomial  9  829.1255
+## hnb_models[[i]]          Hurdle Negative Binomial  9  840.3242</code></pre>
 <p>For the late for class case, we get broadly the same picture. Now it’s the zero-inflated model that narrowly beats the negative binomial. For the dismissed from class case, the zero-inflated model outperforms the negative binomial by a bit more.</p>
 <p>It is unsatisfactory to decide on the best model by, basically, staring at negative log-likelihoods (in the AIC). We would like to see how well the model fits data. Moreover, likelihood (and by implication the AIC) doesn’t tell us anything about model fit on its own. The number by itself is meaningless. We can compare likelihoods to see whether one model is better than another, but these could be small differences among models that are all horrible fits. For these reasons we will now also visualize model fit.</p>
 </div>
@@ -199,11 +200,153 @@ patch[[1]]  + plot_annotation(title=&quot;Days sick models&quot;,
 <p><img src="{{< blogdown/postref >}}index.en_files/figure-html/unnamed-chunk-7-2.png" width="672" /></p>
 <p>For the late for class and dismissed from class models, it is hard to detect a difference between the negative binomial model on the one hand and the zero-inflated and hurdle binomials on the other.</p>
 </div>
+<div id="cross-validation" class="section level3">
+<h3>Cross validation</h3>
+<p>A third method check the model by splitting the data set into a training set and a test set. The model is then built on the bases of the training data and has to proof itself on the test data set it has not seen before. A method that has a good track record is leave-on-out cross validation, in which this process is repeated many times leaving out one observation each time. This take a lot of processing power and hence time, but fortunately Andrew Gelman, Aki Vehtari and colleagues have worked out an optimization algorithm that is relatively fast and still performs well. This work is laid down in the <code>loo</code> package. It works for Bayesian models only, so we run the same likelihood models with standard <code>brms</code> priors. These models take a while to run, so we restrict the cross validation to the late for class response variable for convenience.</p>
+<pre class="r"><code>library(brms)
+library(loo)
+
+setwd(&quot;C:/R/edu/chronotypes&quot;)
+
+# finally give the vars reasonable names
+att &lt;- att %&gt;% mutate(late=`LA 1st 2013-2014`,
+                      sick_freq = `Sick frequency 2013-2014`,
+                      removed = `Removed 2013-2014`)
+# fit a negbin with brms to late for class
+br_nb_1 &lt;- brm(data = att, 
+              family = negbinomial,
+              late ~ 1 + age + sex + MSF_sc,
+              iter = 2000, warmup = 1000, cores = 4, chains = 4,
+              seed = 12,
+              file = &quot;fits/neg_binomial_late&quot;)
+
+br_pois_late &lt;- brm(data = att, 
+               family = poisson(link=&quot;log&quot;),
+               late ~ 1 + age + sex + MSF_sc,
+               iter = 2000, warmup = 1000, cores = 4, chains = 4,
+               seed = 12,
+               file = &quot;fits/poisson_late&quot;)
+
+br_zi_nb_late &lt;- brm(data = att, 
+                    family = zero_inflated_negbinomial(link = &quot;log&quot;),
+                    late ~ 1 + age + sex + MSF_sc,
+                    iter = 2000, warmup = 1000, cores = 4, chains = 4,
+                    seed = 12,
+                    file = &quot;fits/zi_nb_late&quot;)
+
+br_hurdle_nb_late &lt;- brm(data = att, 
+                     family = hurdle_negbinomial(link = &quot;log&quot;),
+                     late ~ 1 + age + sex + MSF_sc,
+                     iter = 2000, warmup = 1000, cores = 4, chains = 4,
+                     seed = 12,
+                     file = &quot;fits/hurdle_nb_late&quot;)
+
+# models have been compared with loo() and are now loaded from disk for speed
+load(&quot;fits/loo_late&quot;)
+loo_late</code></pre>
+<pre><code>## Output of model &#39;br_nb_1&#39;:
+## 
+## Computed from 4000 by 424 log-likelihood matrix
+## 
+##          Estimate   SE
+## elpd_loo   -572.7 21.1
+## p_loo         4.5  0.4
+## looic      1145.3 42.2
+## ------
+## Monte Carlo SE of elpd_loo is 0.0.
+## 
+## All Pareto k estimates are good (k &lt; 0.5).
+## See help(&#39;pareto-k-diagnostic&#39;) for details.
+## 
+## Output of model &#39;br_pois_late&#39;:
+## 
+## Computed from 4000 by 424 log-likelihood matrix
+## 
+##          Estimate   SE
+## elpd_loo   -628.2 26.9
+## p_loo         8.1  1.1
+## looic      1256.4 53.8
+## ------
+## Monte Carlo SE of elpd_loo is 0.1.
+## 
+## All Pareto k estimates are good (k &lt; 0.5).
+## See help(&#39;pareto-k-diagnostic&#39;) for details.
+## 
+## Output of model &#39;br_zi_nb_late&#39;:
+## 
+## Computed from 4000 by 424 log-likelihood matrix
+## 
+##          Estimate   SE
+## elpd_loo   -573.0 21.0
+## p_loo         5.1  0.5
+## looic      1145.9 42.1
+## ------
+## Monte Carlo SE of elpd_loo is 0.0.
+## 
+## All Pareto k estimates are good (k &lt; 0.5).
+## See help(&#39;pareto-k-diagnostic&#39;) for details.
+## 
+## Output of model &#39;br_hurdle_nb_late&#39;:
+## 
+## Computed from 4000 by 424 log-likelihood matrix
+## 
+##          Estimate   SE
+## elpd_loo   -581.9 21.2
+## p_loo         5.7  0.7
+## looic      1163.9 42.3
+## ------
+## Monte Carlo SE of elpd_loo is 0.1.
+## 
+## All Pareto k estimates are good (k &lt; 0.5).
+## See help(&#39;pareto-k-diagnostic&#39;) for details.
+## 
+## Model comparisons:
+##                   elpd_diff se_diff
+## br_nb_1             0.0       0.0  
+## br_zi_nb_late      -0.3       1.0  
+## br_hurdle_nb_late  -9.3       4.3  
+## br_pois_late      -55.5      12.0</code></pre>
+<p>At the bottom of the loo output we see that the first model <code>br_nb_1</code>, which is the negative binomial model, comes out on top. This doesn’t mean much though, because the difference between the NB and the zero-inflated NB is overwhelmed by the standard error. Again, we find no reason in terms of model fit to prefer the zero-inflated or hurdle versions of the NB over the regular NB.</p>
+</div>
 </div>
 <div id="interpretation" class="section level2">
 <h2>Interpretation</h2>
-<p>So which model do we choose? Both in terms of AIC scores and visual checks of model fit, there is not much reason to choose a zero-inflated or hurdle verion of the negative binomial over the regular negative binomial. Parsimony would suggest the negative binomial will do just fine.</p>
-<p>So what does this model tell us? We already saw that increasing the natural midpoint of sleep by an hour increases days sick by 13%. The negative binomial estimate for late for class is 0.14, with standard error 0.069. For dismissed from class the estimate is 0.4 with standard error 0.069. This means, after exponentiating the estimates, that we expect every extra hour of the natural midpoint of sleep to lead to 15% more cases of students being late for class and 50% more dismissals from class.</p>
-<p>That seems like a lot, but we have to keep in mind that all cases of absenteeism are rare events. We need an idea of the impact of absenteeism on student welfare and grades (or a disruption of learning culture in a class) to assess whether a 50% percent increase in the number of dismissals (from rare to a bit less rare) is a lot.</p>
-<p>The language can be misleading here. By saying that we expect an increase of so many percent, we are implicitly making a causal claim. The research design isn’t set up for that job though. It’s the model that expects these increases in absenteeism. We need not believe this model, because it leaves out a lot. So many aspects of human psychology could be confounded with chronotype and absenteeism that the confidence in a causal link between the two should not be all that high. The results are suggestive though, so the hunt for (quasi-)experimental designs in this area should be opened.</p>
+<p>So which model do we choose? Both in terms of AIC scores and visual checks of model fit, there is not much reason to choose a zero-inflated or hurdle verion of the negative binomial over the regular negative binomial. Parsimony would suggest the negative binomial will do just fine. We could still prefer the zero-inflated and hurdle models if we found the story behind picking these models particularly convincing. But I don’t think they are.</p>
+<p>So what does this NB model tell us about chronotypes and absenteeism? We already saw that increasing the natural midpoint of sleep by an hour increases days sick by 13%. The negative binomial estimate for late for class is 0.14, with standard error 0.069. For dismissed from class the estimate is 0.4 with standard error 0.069. This means, after exponentiating the estimates (to undo the log link), that we expect every extra hour of the natural midpoint of sleep to lead to 15% more cases of students being late for class and 50% more dismissals from class.</p>
+<p>That seems like a lot, but we have to keep in mind that all cases of absenteeism are rare events. We need an idea of the impact of absenteeism on student welfare and grades (or a disruption of learning culture in a class) to assess whether a 50% percent increase in the number of dismissals (from rare to a bit less rare) is a lot. For perspective, let’s plot the conditional effects of chronotype of the Bayesian models, while taking average values for the other variables.</p>
+<pre class="r"><code>setwd(&quot;C:/R/edu/chronotypes&quot;)
+br_nb_rem &lt;- brm(data = att, 
+               family = negbinomial,
+               removed ~ 1 + age + sex + MSF_sc,
+               iter = 2000, warmup = 1000, cores = 4, chains = 4,
+               seed = 12,
+               file = &quot;fits/neg_binomial_rem&quot;)
+
+br_nb_sick &lt;- brm(data = att, 
+                 family = negbinomial,
+                 sick_freq ~ 1 + age + sex + MSF_sc,
+                 iter = 2000, warmup = 1000, cores = 4, chains = 4,
+                 seed = 12,
+                 file = &quot;fits/neg_binomial_sick&quot;)
+
+# plot effects of MSF
+br_p1 &lt;- plot(conditional_effects(br_nb_sick, effects=&quot;MSF_sc&quot;), plot = F)[[1]] + 
+            labs(x=&quot;&quot;, y= &quot;frequency of sick&quot;) +
+            ylim(c(0,6))
+
+br_p2 &lt;- plot(conditional_effects(br_nb_1, effects=&quot;MSF_sc&quot;), plot = F)[[1]] + 
+  labs(x=&quot;&quot;, y= &quot;late for class&quot;) +
+  ylim(c(0,6))
+
+br_p3 &lt;- plot(conditional_effects(br_nb_rem, effects=&quot;MSF_sc&quot;), plot = F)[[1]] + 
+  labs(x=&quot;chronotype&quot;, y= &quot;removed from class&quot;) +
+  ylim(c(0,6))
+
+patch_brms &lt;- (br_p1 / br_p2 / br_p3) + 
+  plot_annotation(title=&quot;Estimated effect of chronotype on absenteeism&quot;,
+                  subtitle=&quot;Bands are 95% credible intervals&quot;)
+patch_brms</code></pre>
+<p><img src="{{< blogdown/postref >}}index.en_files/figure-html/unnamed-chunk-9-1.png" width="672" />
+Note that the bands are credible intervals. So they mean what a lot of people think confidence intervals mean: there is a probability associated with every possible estimate of chronotype inside the band. At every x value these estimates sum to 95% probability. In any case, these graphs of the absolute difference in absenteeism rather than the relative ones present a less spectacular picture of the influence of chronotype on absenteeism, even for the case of the 50% increase in dismissals.</p>
+<p>Furthermore, the language can be misleading here. By saying that we expect an increase of so many percent, we are implicitly making a causal claim. The research design isn’t set up for that job though. It’s the model that expects these increases in absenteeism. We need not believe this model, because it leaves out a lot. That is, many aspects of human psychology could be confounded with chronotype and absenteeism, so that our confidence in a causal link between the two should not be all that high. The results are suggestive though, so the hunt for (quasi-)experimental designs in this area should be opened.</p>
 </div>
