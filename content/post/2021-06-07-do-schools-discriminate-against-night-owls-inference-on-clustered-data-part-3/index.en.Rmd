@@ -1,0 +1,507 @@
+---
+title: Do Schools Discriminate Against Night Owls? Inference on Clustered Data (part
+  3)
+author: Edi Terlaak
+date: '2021-06-07'
+slug: do-schools-discriminate-against-night-owls-inference-on-clustered-data-part-3
+categories: []
+tags: []
+subtitle: ''
+summary: ''
+authors: []
+lastmod: '2021-06-07T10:47:18+02:00'
+featured: no
+image:
+  caption: ''
+  focal_point: ''
+  preview_only: no
+projects: []
+---
+
+We continue to look at the results of the observational study at a secondary school in Coevorden, where we this time focus on the relation between chronotype and grades. First, we analyze the data visually, to get a feel for what is going on. We then impute missing data - this time with the `Amelia 2` package - and push the imputed data sets through a bunch of multilevel models as well as through a fixed effects model with robust standard errors.
+
+## Visual Exploration
+We start of course by loading the data and cleaning it up.
+```{r message=F, warning=F}
+library(tidyverse)
+library(lme4)
+library(Amelia)
+library(naniar)
+library(broom.mixed)
+library(arm)
+library(merTools)
+library(ggplotify)
+library(patchwork)
+library(broom)
+library(sandwich)
+library(lmtest)
+
+setwd("C:/R/edu/chronotypes")
+scores <- read_tsv("Grades_and_attendance.txt")
+
+# rename variables, types and some levels; as.data.frame is required to work with Amelia 2 later
+scores <- scores %>% 
+  rename( stud_ID = `student ID`,
+          late_13_14=`LA 1st 2013-2014`,
+          sick_freq_13_14 = `Sick frequency 2013-2014`,
+          removed_13_14 = `Removed 2013-2014`,
+          years_in_sample = `. of years in sample`,
+          LA_later_13_14 = `LA later 2013-2014`,
+          sick_dur = `Sick duration 2013-2014`,
+          sick_days_no_consec = `Sick days 2013-2014 no consecutive`,
+          late_14_15 = `LA 1st 2014-2015`,
+          LA_later_14_15 = `LA later 2014-2015`,
+          removed_14_15 = `Removed 2014-2015`,
+          sick_freq_14_15 = `Sick frequency 2014-2015`,
+          sick_dur_14_15 = `Sick duration 2014-2015`,
+          subject_area = "subject area",
+          academic_year = "Academic year") %>% 
+                mutate_at(c("MCTQ_year", "Class", "Topic", "subject_area", "Level", "sex"), 
+                          funs(factor(.))) %>% 
+                    mutate_at(c("late_14_15", "LA_later_14_15", "sick_freq_14_15", "sick_dur_14_15"), 
+                              funs(as.integer(.))) %>% 
+                          mutate(sex=fct_recode(sex,
+                                                "female"="0",
+                                                "male" = "1")) %>% 
+  as.data.frame()
+```
+
+Let's first check some unconditional relations in the data. Sleeping longer hours is associated with higher grades, while a later natural mid point of sleep (late chronotype) is associated with lower grades. This is all as expected.
+
+```{r message=F, warning=F}
+# Longer sleep corr with higher grades
+p1 <- scores %>% ggplot(aes(SD_w,Grade)) + geom_jitter(alpha=0.03) +
+  geom_smooth(method="lm", color="orange") + labs(x="average hours of sleep")
+
+# Plot relationship between MSF and grades
+MSF_Gr_p <- scores %>% ggplot(aes(MSFsc,Grade)) + geom_jitter(alpha=0.03) +
+  geom_smooth(method="lm", color="pink", size=0.5) + labs(x="chronotype score")
+
+patch <- p1 + MSF_Gr_p
+patch
+```
+
+We clearly do not capture much of the variation in grades by looking at sleeping patterns, because the spread is huge. Fitting anything other than a line through these sample data seems bold. 
+
+We continue the analysis for chronotype scores (instead of the length of sleep) and grades, because theory suggests chronotype should have the biggest impact (which it has). According to the authors of the study, there is evidence that chronotype affects fluid intelligence more than crystallized intelligence. They furthermore assume that STEM subjects appeal to fluid intelligence more than the other subjects. I'm not so sure about that, but we look at this possible pattern in the data anyway. That is, we will look at the relation within `Topic`, where the topics (subjects, such as geography or physics) are arranged from more to less exact. So math comes first, while history comes last. From glancing at the data below, we do indeed see steeper downward regression lines for STEM (the first row) than for non-STEM subjects (the second row).
+
+```{r message=F, warning=F}
+# rearrange levels for Topics from more exact to less exact
+neworder <- c("mathematics","physics","chemistry", "biology", "English", "Dutch", "geography", "history")
+score_arr <- arrange(transform(scores,
+                  Topic=factor(Topic,levels=neworder)),Topic) 
+# Plot scores by Topic
+score_arr %>% 
+  ggplot(aes(MSFsc,Grade,color=Topic)) + geom_jitter(alpha=0.03) +
+  geom_smooth(method="lm", color="black", size=0.5) + labs(x="chronotype score") +
+  facet_wrap(vars(Topic), nrow = 2) +
+  theme(legend.position="none")
+
+```
+
+Physics is the odd one out. There are far less data for physics though, because it is only taught for one out of the three years that are in the study. Hence also the wider confidence interval band. However, the same goes for chemistry, which does follow the pattern of the other STEM-subjects.
+
+```{r message=F, warning=F}
+# by year and by topic
+# The odd one out is English third year
+MSF_Gr_p +
+  facet_grid(rows = vars(Year), cols = vars(Topic))
+```
+
+We also observe that chemistry is taught in the second year, while physics is taught in the third year. More generally, something is going on in the third year. Biology, Dutch, history and physics have almost flat regression lines, while English is even going up! In other words, those who naturally sleep later do better in English in the third year. So the odd behavior of physics may be due more to the year of the student than to the subject. 
+
+Let's drill a little deeper into the behavior of students in year three, by looking at the role of age. There may be some biological process going on where students adapt to dealing with early starting hours, that kicks in at a later age. For an alternative explanation, we take the level of the student (havo or vwo) into account, because there are strong differences in class norms between havo and vwo. These could play some role as well.
+
+```{r message=F, warning=F}
+# by year and age: something is going on with doublers (and in havo 3, which is flat)
+scores %>% filter(age < 16) %>% 
+  ggplot(aes(MSFsc,Grade)) + geom_jitter(alpha=0.02) +
+  geom_smooth(method="lm", aes(color=Level), size=0.5) +
+  facet_grid(rows = vars(Year), cols = vars(age), labeller = label_both) +
+  scale_colour_manual(values = c("havo" = "khaki", "vwo" = "cyan"))
+```
+
+We observe that the average age for year one is 12, for year two 13 and for year three 14. Older students in the same year may be repeating a school year. So 14-year olds at vwo year 2 show a different pattern from the 13-year olds at vwo year 2. This difference is even stronger for 15-year olds in year three. 
+
+Also, when we compare graphs vertically, we note that 14-year olds in year 2 of vwo show a different trend from 14-year olds in year 3 of vwo. This suggests that the moderated impact of chronotype on grades is not just about age.
+
+We also note that the line for regular 14-year olds in havo flattens out in year 3, but not the one for regular vwo students in year 3. The fact that 15-year old vwo students, who may repeat a year, show the same trend as havo students their age, may point to the role of a lack of motivation. That is, vwo students who repeat a year may display the same low levels of motivation as regular havo 3 students (which have a reputation in this regard). The explanatory idea here is that if nobody is paying much attention or making much of an effort in class, then chronotype will play less of a role. 
+Whether or not it is because of their motivation, the flattening regression lines of chronotype and grades in year 3 seem to be due to the havo students. Let's look at the role of student level (havo or vwo) in the odd behavior of physics directly. 
+
+```{r message=F, warning=F}
+# by Topic and Level
+score_arr %>% 
+  ggplot(aes(MSFsc,Grade)) + geom_jitter(alpha=0.03) +
+  geom_smooth(method="lm", aes(color=Level), size=0.5) + labs(x="chronotype score") +
+  scale_colour_manual(values = c("havo" = "khaki", "vwo" = "cyan")) +
+  facet_wrap(vars(Topic), nrow = 2) 
+```
+
+We see that it's the havo-students bucking the trend in physics.
+
+We can get more insight into these assumptions by taking into account the role of class dynamics. If chronotype has less of an effect in the third year of havo because there is a weak culture of learning inside the classroom, then this should be reflected in trends per classroom. For starters, the supposed lack of a culture of learning is not reflected in the grades of havo 3 or their spread. 
+
+```{r message=F, warning=F}
+scores %>% group_by(Level, Year) %>% 
+  summarize(mean = mean(Grade),
+            sd = sd(Grade))
+```
+
+However, teachers may calibrate their tests with the help of the students they face and not some outside standard of what is the appropriate difficulty level.
+
+Let's also look at the classrooms individually, per level.
+
+```{r message=F, warning=F}
+# Check per class, mixed picture
+h1 <- scores %>% filter(Level=="havo") %>% 
+  ggplot(aes(MSFsc,Grade)) + geom_jitter(alpha=0.03) +
+  geom_smooth(method="lm", color="khaki", size=0.5) + labs(x="chronotype score") +
+  facet_wrap(vars(Class)) +
+  ggtitle("Havo classes")
+
+v1 <- scores %>% filter(Level=="vwo") %>% 
+  ggplot(aes(MSFsc,Grade)) + geom_jitter(alpha=0.03) +
+  geom_smooth(method="lm", color="cyan", size=0.5) + labs(x="chronotype score") +
+  facet_wrap(vars(Class)) +
+  ggtitle("Vwo classes")
+
+patch_level <- h1 + v1
+patch_level
+```
+
+Here the third year of havo doesn't jump out in terms of the flatness of the slopes. Yes, it's flatter than other years, but vwo year 1 en 2 are pretty flat as well. It could be that there is some other mechanism by which the effect of chronotype is moderated, or it could be that we are looking at noise. We probably need more data to make progress on this front, but we will see how far inference takes us in the next section.
+
+A more general question we may ask if whether the variation in slopes is driven more by subject area (humanistic vs scientific) or by classroom dynamics. We split the graphs out by level (havo/vwo), because they have different classroom norms. We look at havo first.
+
+```{r message=F, warning=F}
+# Here it may be worth writing a function for plotting
+plot_level_subject <- function(level,area) {scores %>% filter(Level==level & subject_area ==area) %>%   ggplot(aes(MSFsc,Grade)) + 
+  geom_jitter(alpha=0.03) +
+  geom_smooth(method="lm", color=ifelse(level=="havo", "khaki", "cyan"), size=0.5) + 
+  labs(x="chronotype score") +
+  facet_wrap(vars(Class)) +
+  ggtitle(paste(level,area,sep=" : "))
+}
+
+h1_h <- plot_level_subject("havo", "humanistic/linguistic")
+h1_s <- plot_level_subject("havo", "scientific")
+v1_h <- plot_level_subject("vwo", "humanistic/linguistic")
+v1_s <- plot_level_subject("vwo", "scientific")
+
+patch_lev_h <- (h1_h + h1_s)
+patch_lev_h
+```
+
+If we look inside a class, we have to make an effort to spot differences in slope between the two subject areas. The same goes for vwo, so there is not a huge difference between the levels in this regard.  
+
+```{r message=F, warning=F}
+patch_lev_v <- (v1_h + v1_s)
+patch_lev_v
+```
+
+Finally, we look at the role of gender. The grades of female students seem to be affected more by chronotype than those of male students. 
+
+```{r message=F, warning=F}
+# stronger for females than for males
+na.omit(scores) %>% ggplot(aes(MSFsc,Grade)) + geom_jitter(alpha=0.03) +
+  geom_smooth(method="lm", aes(color=sex), size=0.5) + labs(x="chronotype score") +
+  facet_wrap(vars(sex)) +
+  scale_colour_manual(values = c("female" = "hotpink", "male" = "skyblue"))
+```
+
+However, these effects do not play much of a role in explaining the difference between STEM topics and non-STEM topics.
+
+```{r message=F, warning=F}
+# no Topic jumps out where women do much worse than men
+score_arr %>% 
+  ggplot(aes(MSFsc,Grade)) + geom_jitter(alpha=0.03) +
+  geom_smooth(method="lm", aes(color=sex), size=0.5) + labs(x="chronotype score") +
+  facet_wrap(vars(Topic), nrow = 2) +
+  scale_colour_manual(values = c("female" = "hotpink", "male" = "skyblue"))
+```
+
+Before we can turn to inference, we need to assess the nature of the missing data. 
+
+## Missing data
+The helpful `naniar` package allows us to quickly assess how many data points are missing per variable. Its absenteeism and chronotype scores that are well over the 10% missing threshold beyond which imputation is typically advised. 
+
+```{r message=F, warning=F}
+print(miss_var_summary(scores), n=28)
+
+```
+
+For missing data imputations the major R packages are `mice` and `Amelia 2`. We already used `mice` a bunch of times, so let's give `Amelia 2` a shot. For a guide on how and when to use `mice`, check out this [article](https://www.researchgate.net/publication/316789124_Multiple_Imputation_by_Chained_Equations_in_Praxis_Guidelines_and_Review). A big advantage of `Amelia 2` is that one of it's authors, Gary King, has given an almost [two hour long accessible exposition](https://www.youtube.com/watch?v=qlPs8Ioa56Y&t=4133s) about the algorithm, so that we can figure out how the imputation process proceeds without much effort.
+
+We impute then, and  graphically check the difference with existing values.
+
+```{r}
+
+# Amelia imputation; count as ordinal, see vignette; greyed out because we load result from disk
+# nom_vars = c("Topic",  "Level", "Class")
+# ord_vars = c("late_14_15", "LA_later_14_15", "removed_14_15", "sick_freq_14_15", "sick_dur_14_15", "sex")
+# a.out <- amelia(scores, m = 5, noms = nom_vars,
+#ords = ord_vars,          
+#idvars = c("academic_year", "MCTQ_year",  "subject_area", "years_in_sample", "Year"))
+
+# save(a.out, file = "imputations.RData")
+setwd("C:/R/edu/chronotypes")
+load("imputations.RData")
+
+# make plots for the 3 count vars (note that 13_14 and 14_15 recorded per student) and MSFsc
+# Note the ~ that we insert into as.ggplot
+ggp <- list()
+for (i in 24:26){
+  ggp[[i-23]] <- as.ggplot(~ plot(a.out, which.vars = i))
+}
+
+ggp[[4]] <- as.ggplot(~ plot(a.out, which.vars = 5))
+
+patch <- (ggp[[1]] + ggp[[2]]) / (ggp[[3]] + ggp[[4]]) + plot_annotation(
+  title="Missing data imputed in red")
+patch
+
+```
+
+For absenteeism, the imputation doesn't reflect existing data entries well. This is suspicious, but we can never be sure if missing entries follow a different pattern. The crucial MSFsc variable matches existing data fairly well, which instills some confidence.
+
+## Inference for clustered data
+Looking at graphs is insightful, but doesn't necessarily tell us what is going on in the population or super-population. To that end, we will do some frequentist inference. 
+
+The authors of the paper were interested in estimating the effect of chronotype on grades. To that end, one idea is to simply run an OLS model with`stud_ID` and `Class` as indicator variables as well as a bunch of variables that one suspects could have some influence. We pick the variables that the authors eventually settled on (more on that later).
+
+```{r}
+fit_lm <- lm(Grade ~ 1 + MSFsc + late_13_14 + removed_13_14 + sick_dur + 
+               sex + age + Topic + Class + Period + stud_ID, data=a.out$imputations[[1]])
+summary(fit_lm)
+```
+
+We note first of all that only about 8% of the variance in grades is explained by all these variables. That is not a huge amount. Chronotype in particular can expect to explain only 1% of the variance (not shown here). That doesn't seem like much. However, if we leave genetic factors out of the equation, then results in education are the sum of many small factors. So the small impact of chronotype on grades is not a reason to abandon the investigation.  
+
+A more pressing problem of the above model is that it assumes that the grades are independent. But they aren't, because if you know one grade of a student, you have information about another grade from the same student. The same goes for grades from students from the same class - these grades turn out to be correlated as well.  
+
+We can correct for this influence in two ways. We discuss each one below.
+
+1. We can use clustered standard errors to patch up the standard errors that are too small in the OLS model.
+2. We can build a multilevel model to reflect the multilevel nature of the process that generated the data.
+
+### Clustered Standard errors
+One of the assumptions of the linear regression model is that the observations are independent and that the error term is constant across observations. These assumptions are reflected in what the variance covariance matrix $\Sigma$ should look like. Independence of observations means that the observations are uncorrelated with each other so that the off-diagonal elements are zero. The constant error term (or homoscedasticity) implies that terms on the diagonal are the same. 
+ 
+$$\Sigma =
+\begin{bmatrix}
+    \sigma  & 0 & 0\\
+    0 & \sigma & 0 \\
+    0 & 0 & \sigma
+\end{bmatrix}$$
+
+If these assumptions are not met, our model will be misspecified. A common way to proceed is to not fix the problems in the model, but to carry on with the misspecified model and patch it up by using robust standard errors. These are also known as sandwich estimators for the standard errors, because a key trick in estimating the robust standard error is to use the accompanying matrices to reduce the n by n matrix $\Sigma$ to a k by k matrix, where k is the number of variables. That means far less parameters need to be estimated. We forgo a discussion here of how this is done. 
+
+The whole approach sounds dodgy. Why not fix the problems in the model instead of carrying on with a misspecified model? Moreover, if the assumptions of independence and homoscedasticity are not met, what else could be wrong with the model? Indeed, often a lot more *is* wrong with the model, which can lead to radically different estimates of the independent variables in the model. See [here](https://youtu.be/j3Sxbkd9iIs?t=1418) for an example. Patching up standard errors does nothing to change these estimates. Indeed, [some](https://youtu.be/j3Sxbkd9iIs?t=956) argue for using robust standard errors as a diagnostic device. If they differ too much from classical standard errors, it signals problems in model specification, that must be fixed. 
+
+In the case of multilevel data structures, robust standard errors can be used to correct for the correlation between observations. These do not necessarily bias the estimation of the explanatory variables in the model. However, robust standard errors shouldn't be used to fix other specification problems in the model or if the researcher cares about effects at the group level. 
+
+A bunch of simulations described by Bosker and Snijders in Chapter 12 of the 2nd edition of their *Multilevel Analysis* book confirm that the standard errors for fixed effects in otherwise well specified models can be estimated adequately with robust standard errors. This sounds dodgy, but from these simulations it appears that if there are around 40 clusters, which are not correlated among themselves and fairly balanced in size, it is okay to carry on with the misspecified classical linear model to estimate fixed effects. It must be mentioned though that using robust standard errors reduces the efficiency of the estimation. 
+
+Applying robust standard errors in our case to estimate the effect of chronotype is iffy. To do so, we should take the highest level of the multilevel into account. Arguably, that is the level of the students (havo or vwo). However, these are just two clusters, which are not even well balanced. Alternatively, we can use classes as the highest level of clustering, which brings us up to 20 well balanced clusters, and adjust for the level (havo/vwo) in the model specification. 
+
+```{r warning=F, message=F}
+m1coeffs_std <- data.frame(summary(fit_lm)$coefficients)
+coi_indices <- which(!startsWith(row.names(m1coeffs_std), 'Class'))
+
+m1coeffs_cl <- coeftest(fit_lm, vcov = vcovCL, cluster = ~Class)
+m1coeffs_cl[coi_indices,]
+```
+
+Note that the standard errors have increased across the board by about an order of magnitude, as expected. We will compare these results with those of the multilevel model.
+
+### Multilevel models
+A more principled way to model the data is to have levels in the model that match the levels in the data generating process. That is, we treat grades as the smallest unit in the analysis, students as a first level and classes as a second level, where students are nested inside classes. 
+
+One approach is to set up models for the group means: the mean score of each student could be modeled based on chronotype, age, sex and so on and the mean scores of each class could be modeled based on its level, for example. After running these two models we could set up models inside each group to estimate for example the grades inside a class. This way we are already doing a kind of multilevel analysis. We are taking the correlations inside classes and for individuals into account after all, by setting up a model for each one of them. But we can do better. 
+
+If we are willing to assume that the classes are drawn from some (super-)population, then we can set up a probability distribution for them. Say, a normal distribution. We can learn from the data what the mean and the standard deviation of this distribution is. What good is there in setting up this distribution? The answer is that it allows us to learn something about the class mean we expect by moving from class to class. If we get an exceptional result for one class sample, we can 'regularize' it based on the distribution for class means we learned from the other classes. This makes intuitive sense from a Bayesian point of view - where a so called prior plays this role - but for those unfamiliar with this way of thinking I refer to the formula I discussed [here](https://www.editerlaak.nl/post/mixing-up-math-multilevel-models-part-2/). The same goes for the groups of individual students (confusingly, because grades are the lowest level of analysis, individual students are also groups). 
+
+The starting point for multilevel modeling is sometimes called the null model. We use `lmer` to run a basic model with two levels on the imputed data sets. 
+
+```{r warning=F, message=F}
+null_fml <- "Grade ~ 1 + (1 | stud_ID)"
+fit_null <- lmerModList(null_fml, data = a.out$imputations)
+
+fastdisp(fit_null)
+```
+
+We observe that the standard deviation of grades between students is 0.62 and within students 1.43. So most of the spread in grades happens 'inside' a student (because of the amount of learning or the topic, we may assume). 
+
+We must make a reservation here. If we turn the sd's into variances, it would be tempting to add them up and call the sum the total variance. This is what the [law of total variance](https://www.youtube.com/watch?v=mHonq7Gjjqg&list=PLUl4u3cNGP60hI9ATjSFgLZpbNJ7myAg6&index=138) in probability theory says after all, which we loosely rephrase as: 
+
+* total variance = variance within groups + variance between groups 
+
+We are not dealing with population variances however, but with samples, so that there is uncertainty. Some of the variance between groups could be due to factors at the individual level that are distributed unevenly among the groups. Since this is a sampling problem, it goes away as the size of the sample goes to infinity. For the formula for the total variance in the case of a sample, see Snijders and Bosker 2012, p. 20. 
+
+What all of this means is that the numbers we just gave for the spread of grades inside students and between students are conditional on a bunch of individual level variables that could mask the true variances in the population. 
+
+We can do yet more justice to the data generating process by adding a level for classes as well. 
+
+```{r warning=F, message=F}
+fit_null_tl <- lmerModList(Grade ~ 1 + (1 | Class/stud_ID),
+                 data = a.out$imputations)
+fastdisp(fit_null_tl)
+```
+
+If we add up the squared sd's (i.e. the variance) of all three levels we see that the total variance has increased. This is impossible of course. So it due to the fact that we are estimating the population variance, where, again, lower level variation can inflate the variation observed at the higher level. 
+
+In order to arrive at the author's model we add a forth level, consisting of the Level (havo/vwo) of the students. It is debatable whether these levels are exchangeable though. That is, we need to believe clusters are similar, so that it makes sense to set up a probability distribution for them (i.e. to treat them as 'random', in the frequentist lingo). Of course, this objection would apply to treating classes as exchangeable just as much.
+
+We also include the explanatory variables that the authors settled upon. These variables were featured in a model that was the winner of a competition of nine models, that was decided by looking at their AIC scores. Fitting several models is better than one model. But why nine models and not ten or twenty? In response to these questions, a new trend in running regressions is to specify all possible models and look at the [specification curve](https://www.nature.com/articles/s41562-020-0912-z#:~:text=The%20descriptive%20specification%20curve%20serves,decisions%20are%20the%20most%20consequential.) of tens of thousands of specifications. I hope to pursue this line of analysis in a future post. 
+
+```{r warning=F, message=F}
+# Author's model; Four levels as authors, with Level havo/vwo as highest level - but only two categories!
+fit_null_fl <- lmerModList(Grade ~ 1 + sex + MSFsc + late_14_15 + removed_14_15 + sick_dur + Period + subject_area + (1 | Level/Class/stud_ID),
+                    data = a.out$imputations)
+fastdisp(fit_null_fl, digits=3)
+```
+
+Across the board, we note that the coefficient estimates are quite similar to the original classical linear model that we fitted with `lm`. However, the standard errors are again quite a bit bigger, as in the case of the robust standard errors. Compared to the latter case, the standard errors of the four-stage multilevel model are bigger overall. So robust standard errors come close, but underestimate uncertainty a little bit, which is consistent with simulations discussed in chapter 12 of Snijders and Bosker (2012).
+
+By adding the variables preferred by the authors, we can investigate the interaction between STEM subjects and chronotype in a multilevel model, where the influence of classes and students is taken into account.
+
+```{r warning=F, message=F}
+# the difference between imputations is very small, so we take the first for convenience
+fit_2 <- lmer(Grade ~ 1 + Level + sex + late_14_15 + removed_14_15 + sick_dur + Period + subject_area*MSFsc + (1 | Level/Class/stud_ID),
+              data = a.out$imputations[[1]])
+fastdisp(fit_2)
+```
+
+We observe that the negative effect of chronotype on grade is indeed more pronounced for STEM subjects.
+
+### Analysis of Group Differences
+Even though the results of the multilevel model are very similar to those of the robust standard error approach, there is an advantage to the former. By modeling the levels in the data generating process, we can investigate differences between groups. In this spirit, we fit a model with Class as the highest level, since it has a decent amount of clusters. 
+
+```{r warning=F, message=F}
+fit_4 <- lmer(Grade ~ 1 + MSFsc + (1 + MSFsc | Class/stud_ID),
+              data = a.out$imputations[[1]])
+fastdisp(fit_4)
+```
+
+The usual assumptions of the linear model carry over to the multilevel version. If we wanted to make predictions from the model, we would want to check the homoscedacity of the residuals. We have no such intentions though, so we won't. For the inference on the random parameters (the intercepts and slopes), we do need to check if it is reasonable to impose a normal distribution on them.
+
+```{r}
+# for intercept random
+qqnorm(ranef(fit_4)$Class[,1] )
+qqline(ranef(fit_4)$Class[,1], col = "red")
+
+# for slopes random
+qqnorm(ranef(fit_4)$Class[,2] )
+qqline(ranef(fit_4)$Class[,2], col = "red")
+```
+
+The fit is not perfect, but it seems acceptable. 
+
+We will look now at the plots of the estimated intercepts and slopes for Class and Student, according to our multilevel model with Class as the highest level.
+
+```{r}
+reEx <- REsim(fit_4)
+p1 <- as.ggplot(plotREsim(reEx))
+p1
+```
+
+We shape of these graphs reflects that there are 20 classes and about 500 students. Grayed out confidence intervals intersect with 0. This is true for most intercepts of the classes and students. However, the slopes for chronotype are what really matters. In a way, the bottom part of the diagram is terrible, because we cannot see the differences between the slopes of the classes. We can do better if we wanted, like so.
+
+```{r}
+p2 <- as.ggplot(plotREsim(reEx, facet= list(groupFctr= "Class", term= "MSFsc")))
+p2
+```
+
+But the instructive point of the first, faceted diagram is that all the slopes are significantly different from zero (since they are black) even though they are hugging the horizontal line at 0. In other words, we have so many observations (grades), that the confidence interval is tiny, so as to be invisible. 
+
+This raises the question of how much shrinkage takes place in the multilevel model. Multilevel regression tries to find the sweet spot between pooled and unpooled regression. If there are very few observations per group, then the estimates inside the groups will be very similar to the estimates for the entire population. On the other hand, if there are a lot of observations in the groups, then the grand parameters will have a hard time pulling group parameters towards them. The latter may be the case here. Do does multilevel regression even make a difference here, given the huge number of observations? 
+
+To that end we first estimate the regression lines separately for every class. We then pull the estimates of the multilevel model out of the lme4 object and add the relevant fixed and random parts together to get the multilevel estimates for the regression line per group. We won't show uncertainty estimates here, because what we care about here is the amount of pull towards the unpooled estimates. So let's see what happens. 
+
+```{r}
+MSF_model <- function(df) {
+  lm(Grade ~ 1 + MSFsc, data = df)
+}
+
+pooled_coefs <- list()
+for(i in seq_along(levels(a.out$imputations[[1]]$Class))){
+  pooled_coefs[[i]] <- a.out$imputations[[1]] %>% 
+    filter(Class %in% c(levels(Class)[i])) %>% 
+    MSF_model %>% 
+    tidy %>% 
+    filter(term %in% c("(Intercept)","MSFsc")) %>% 
+    dplyr::select(term,estimate)
+}
+
+classes <- scores %>% pull(Class) %>% levels()
+
+pooled_coefs_df <- map_dfr(pooled_coefs,`[`, c("term", "estimate")) %>% 
+  group_by(term) %>%
+  mutate(row = row_number()) %>%
+  tidyr::pivot_wider(names_from = term, values_from = estimate) %>%
+  dplyr::select(-row) %>% 
+  mutate(classes = classes) %>% 
+  dplyr::select(classes, everything())
+
+# From ranef model
+class_re <- ranef(fit_4)$Class[[2]]
+total_sl <- summary(fit_4)$coefficients[2]
+
+multilevel_slopes <- total_sl + class_re 
+
+class_re_int <- ranef(fit_4)$Class[[1]]
+total_sl_int <- summary(fit_4)$coefficients[1]
+
+multilevel_intercepts <- class_re_int + total_sl_int 
+
+# add together in tibble
+classes <- scores %>% pull(Class) %>% levels()
+df_multilevel <- tibble(classes,multilevel_intercepts, multilevel_slopes)
+
+
+dat_text <- data.frame(
+  label = "Multilevel",
+  classes   = "1h3"
+)
+dat_text2 <- data.frame(
+  label = "Pooled",
+  classes   = "1h3"
+)
+
+# plot, facet grid by class
+  ggplot() +
+  scale_y_continuous(limits=c(4,8)) +
+  scale_x_continuous(limits=c(0,8)) +
+  geom_abline(data=df_multilevel,aes(
+    slope=multilevel_slopes,
+    intercept=multilevel_intercepts),
+    color="darkblue") +
+  geom_abline(data=pooled_coefs_df,aes(
+      slope=MSFsc,
+      intercept=`(Intercept)`), color="pink") +
+    facet_wrap(vars(classes)) +
+    labs(x="chronotype", y="Grade") +
+    ggtitle("Multilevel and pooled regression lines per class") +
+      geom_text(
+      data    = dat_text,
+      color = "darkblue",
+      mapping = aes(x = -Inf, y = -Inf, label = label),
+      hjust   = -0.1,
+      vjust   = -1
+    ) +
+    geom_text(
+      data    = dat_text2,
+      color = "pink",
+      mapping = aes(x = 6, y = 7.5, label = label),
+    )
+
+```
+
+We note that the blue multilevel lines are like a sceptical version of the unpooled 'naive' pink lines. Whenever the separate group regressions (or pooled regression) are sloping up or down too wildly, the multilevel model regularizes the estimates towards the mean of the distribution of the slopes.  
+
+If we believe that classes are exchangeable and that the normal is an appropriate distribution of the random intercepts and slopes, then our speculations about the lack of motivation of havo 3 students seem unwarranted. However, the point of our speculations was that havo 3 classes are different from other classes in terms of motivation, so that they may *not* be exchangeable. So a multilevel model on its own can't really settle the type of speculation we engaged in. One would have to measure students motivation is some way, if one though the speculation was worth pursuing. However, it isn't, unless there is a more convincing scientific story about the effect of the interaction of motivation and chronotype on grades.
+
+## A Final Note
+In the previous post, I ended by saying that the hunt for experimental evidence for the effect of chronotype on school performance should be opened. Shortly afterwards, I learned that an experiment to this effect has already been carried out in Argentina and was [published in 2020](https://sci-hub.mksa.top/10.1038/s41562-020-0820-2). It randomly assigned about 700 students to three different starting times: the morning, the afternoon and the evening. It turned out that late chronotypes, those that go to bed late in weekends, indeed score worse for the group of students that went to school in the morning, but not for those that went to school in the evening. 
+
+These results may not carry over to Western Europe, because the rhythm of life in Argentina - where dinner is typically served at 21h - is very different from that in Western Europe. Indeed, the students had on average much higher chronotype scores than those in Western Europe. With this precaution in mind, the Argentinian study contributes strong causal evidence to the claim that night owls are at a disadvantage because of early school times.   
