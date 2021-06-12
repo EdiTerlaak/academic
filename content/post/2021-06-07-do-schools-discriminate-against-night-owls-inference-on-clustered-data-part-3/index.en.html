@@ -403,7 +403,6 @@ fastdisp(fit_null_tl)</code></pre>
 ## ---
 ## number of obs: 40890, groups: stud_ID:Class, 528; Class, 20
 ## AIC = 146719---</code></pre>
-<p>If we add up the squared sd’s (i.e. the variance) of all three levels we see that the total variance has increased. This is impossible of course. So it due to the fact that we are estimating the population variance, where, again, lower level variation can inflate the variation observed at the higher level.</p>
 <p>In order to arrive at the author’s model we add a forth level, consisting of the Level (havo/vwo) of the students. It is debatable whether these levels are exchangeable though. That is, we need to believe clusters are similar, so that it makes sense to set up a probability distribution for them (i.e. to treat them as ‘random’, in the frequentist lingo). Of course, this objection would apply to treating classes as exchangeable just as much.</p>
 <p>We also include the explanatory variables that the authors settled upon. These variables were featured in a model that was the winner of a competition of nine models, that was decided by looking at their AIC scores. Fitting several models is better than one model. But why nine models and not ten or twenty? In response to these questions, a new trend in running regressions is to specify all possible models and look at the <a href="https://www.nature.com/articles/s41562-020-0912-z#:~:text=The%20descriptive%20specification%20curve%20serves,decisions%20are%20the%20most%20consequential.">specification curve</a> of tens of thousands of specifications. I hope to pursue this line of analysis in a future post.</p>
 <pre class="r"><code># Author&#39;s model; Four levels as authors, with Level havo/vwo as highest level - but only two categories!
@@ -505,13 +504,16 @@ p1</code></pre>
 <pre class="r"><code>p2 &lt;- as.ggplot(plotREsim(reEx, facet= list(groupFctr= &quot;Class&quot;, term= &quot;MSFsc&quot;)))
 p2</code></pre>
 <p><img src="{{< blogdown/postref >}}index.en_files/figure-html/unnamed-chunk-24-1.png" width="672" /></p>
-<p>But the instructive point of the first, faceted diagram is that all the slopes are significantly different from zero (since they are black) even though they are hugging the horizontal line at 0. In other words, we have so many observations (grades), that the confidence interval is tiny, so as to be invisible.</p>
+<p>But the instructive point of the first, faceted diagram is that all the slopes are significantly different from zero (since they are black) even though they are hugging the horizontal line at 0. In other words, we have so many observations that the confidence interval is tiny, so as to be invisible.</p>
 <p>This raises the question of how much shrinkage takes place in the multilevel model. Multilevel regression tries to find the sweet spot between pooled and unpooled regression. If there are very few observations per group, then the estimates inside the groups will be very similar to the estimates for the entire population. On the other hand, if there are a lot of observations in the groups, then the grand parameters will have a hard time pulling group parameters towards them. The latter may be the case here. Do does multilevel regression even make a difference here, given the huge number of observations?</p>
 <p>To that end we first estimate the regression lines separately for every class. We then pull the estimates of the multilevel model out of the lme4 object and add the relevant fixed and random parts together to get the multilevel estimates for the regression line per group. We won’t show uncertainty estimates here, because what we care about here is the amount of pull towards the unpooled estimates. So let’s see what happens.</p>
-<pre class="r"><code>MSF_model &lt;- function(df) {
+<pre class="r"><code># CREATE DF OF POOLED REGRESSION COEFS
+
+#function of the model
+MSF_model &lt;- function(df) {
   lm(Grade ~ 1 + MSFsc, data = df)
 }
-
+# loop over the groups
 pooled_coefs &lt;- list()
 for(i in seq_along(levels(a.out$imputations[[1]]$Class))){
   pooled_coefs[[i]] &lt;- a.out$imputations[[1]] %&gt;% 
@@ -521,9 +523,9 @@ for(i in seq_along(levels(a.out$imputations[[1]]$Class))){
     filter(term %in% c(&quot;(Intercept)&quot;,&quot;MSFsc&quot;)) %&gt;% 
     dplyr::select(term,estimate)
 }
-
+# pull the class names
 classes &lt;- scores %&gt;% pull(Class) %&gt;% levels()
-
+# stuff everything into a df
 pooled_coefs_df &lt;- map_dfr(pooled_coefs,`[`, c(&quot;term&quot;, &quot;estimate&quot;)) %&gt;% 
   group_by(term) %&gt;%
   mutate(row = row_number()) %&gt;%
@@ -532,22 +534,24 @@ pooled_coefs_df &lt;- map_dfr(pooled_coefs,`[`, c(&quot;term&quot;, &quot;estima
   mutate(classes = classes) %&gt;% 
   dplyr::select(classes, everything())
 
-# From ranef model
+# CREATE A DF OF MULTILEVEL REGRESSION COEFS
+
+#pull slopes and intercepts
 class_re &lt;- ranef(fit_4)$Class[[2]]
 total_sl &lt;- summary(fit_4)$coefficients[2]
-
 multilevel_slopes &lt;- total_sl + class_re 
 
 class_re_int &lt;- ranef(fit_4)$Class[[1]]
 total_sl_int &lt;- summary(fit_4)$coefficients[1]
-
 multilevel_intercepts &lt;- class_re_int + total_sl_int 
-
-# add together in tibble
+# add together in df
 classes &lt;- scores %&gt;% pull(Class) %&gt;% levels()
 df_multilevel &lt;- tibble(classes,multilevel_intercepts, multilevel_slopes)
 
 
+# PLOT BOTH REGRESSION LINES PER GROUP
+
+# some text to tell the lines apart
 dat_text &lt;- data.frame(
   label = &quot;Multilevel&quot;,
   classes   = &quot;1h3&quot;
@@ -556,8 +560,7 @@ dat_text2 &lt;- data.frame(
   label = &quot;Pooled&quot;,
   classes   = &quot;1h3&quot;
 )
-
-# plot, facet grid by class
+# the actual plot
   ggplot() +
   scale_y_continuous(limits=c(4,8)) +
   scale_x_continuous(limits=c(0,8)) +
