@@ -164,10 +164,10 @@ star_forest &lt;- rand_forest(
 
 # Create custom metrics
 star_metrics &lt;- metric_set(accuracy, roc_auc, sens, spec)</code></pre>
-<p>Because decision trees do most of the work in the analysis, we say a little more about them.</p>
-<p>In a basic decision tree, the main idea is to split the data points up in sections, using all the predictors. So for the first split you make a cut at those who have free lunch, are male, scores lower than 20 points on a reading test, and so on. You hope that drop outs and graduates (the labels you predict) are already nicely separated into the two spaces (or boxes) that you made. But they probably aren’t yet. So in each box you try to find new lines to split the data points on. And so on.</p>
-<p>How does the algorithm choose the point at which to make a cut? Unless variables are continuous, it simple tries all the options. It then looks at a measure of the ‘purity’ inside the boxes it has made. You want data points to neatly fall in either box, so each box is pure. This can be measured by <a href="https://youtu.be/a3ioGSwfVpE?list=PLl8OlHZGYOQ7bkVbuRthEsaLr7bONzbXS">impurity functions</a> such as gini or entropy. The engines in this post happen to use gini, which you may know from measurements of inequality. In the case of two classes, it multiplies the proportion of each in a box together. The resulting value has a maximum for proportions of 0.5. This is indeed the worse you can do if your goal is to make boxes pure!</p>
-<p>If you put no limitations and this algorithm, it will keep drawing boxes around graduates and drop out, until there is a box around every outcome measure. This is unfortunate, because we have molded our model too much to the training data. We have overfit. Hence there is bias. If we applied this model to the test data set, we would probably get very poor predictions.</p>
+<p>Because decision trees do most of the work in the analysis, we say a little more about how they are made. This helps us understand what we are doing when we tune hyperparameters and how to interpret so called roc curves later on.</p>
+<p>In a decision tree, you split the outcome values into two boxes based on one of your predictors. You then split the outcome values in each of the boxes based on another predictor. And so on. So the first split in our case could be between those who have free lunch and those who do not have a free lunch at school.</p>
+<p>The algorithm must make two decision at each cut. Which predictor to pick and at which point to make a cut? The solution is not very elegant. Unless variables are continuous, the algorithm simply tries every possible cut for each predictor. It then assign a value to each of the (n dimensions times k predictors) cuts that measures how ‘pure’ the boxes are. You want data points to neatly fall in either box, so that each box is pure. This can be measured by <a href="https://youtu.be/a3ioGSwfVpE?list=PLl8OlHZGYOQ7bkVbuRthEsaLr7bONzbXS">impurity functions</a> such as gini or entropy. The engines in this post happen to use gini, which you may know from measurements of inequality. In the case of two classes, it multiplies the proportion of each in a box together. The resulting value has a maximum for proportions of 0.5. This is indeed the worse you can do if your goal is to make boxes pure!</p>
+<p>If you put no limitations and this algorithm, it will keep drawing boxes around graduates and drop outs, until there is a box around every outcome measure. This is unfortunate, because we have molded our model too much to the training data. We have overfit. Hence there is bias. If we applied this model to the test data set, we would probably get very poor predictions.</p>
 <p>Putting breaks on the splitting process is a type of so called regularization. It can be done in several ways, such as limiting the number of leafs of the tree, limiting tree depth or setting a minimal size for the nodes (the final subsets). The defaults for these hyperparameters (hyper because they control the splitting criteria, which are the parameters) depend on the package. In the <code>rpart</code> engine for example, the maximum tree depth is 30 and the minimal number of cases per node is 20. There is also a cost-complexity parameter cp that penalizes splits, so the tree doesn’t grow too wildly.</p>
 <p>The result of regularization is that we do not have perfect purity in our terminal nodes or, if you will, ultimate boxes. So how to apply the labels then? Typically, a proportion of over 0.5 of a certain label in a terminal node is converted into labeling all the points in the box with that label. This threshold is not set in stone though. The effect of moving it will later be glanced from the so called ROC curve and its associated data frame.</p>
 <p>The popularity of decision trees is due to the high quality of the predictions, which require almost no pre-processing of the data and modest computation time.</p>
@@ -185,12 +185,12 @@ star_metrics &lt;- metric_set(accuracy, roc_auc, sens, spec)</code></pre>
 
 fit_tree %&gt;% collect_metrics()</code></pre>
 <pre><code>## # A tibble: 4 x 6
-##   .metric  .estimator   mean     n std_err .config             
-##   &lt;chr&gt;    &lt;chr&gt;       &lt;dbl&gt; &lt;int&gt;   &lt;dbl&gt; &lt;chr&gt;               
-## 1 accuracy binary     0.775      5 0.00249 Preprocessor1_Model1
-## 2 roc_auc  binary     0.577      5 0.0317  Preprocessor1_Model1
-## 3 sens     binary     0.980      5 0.00857 Preprocessor1_Model1
-## 4 spec     binary     0.0647     5 0.0266  Preprocessor1_Model1</code></pre>
+##   .metric  .estimator  mean     n std_err .config             
+##   &lt;chr&gt;    &lt;chr&gt;      &lt;dbl&gt; &lt;int&gt;   &lt;dbl&gt; &lt;chr&gt;               
+## 1 accuracy binary     0.780     5 0.00225 Preprocessor1_Model1
+## 2 roc_auc  binary     0.638     5 0.0135  Preprocessor1_Model1
+## 3 sens     binary     0.975     5 0.00356 Preprocessor1_Model1
+## 4 spec     binary     0.104     5 0.0122  Preprocessor1_Model1</code></pre>
 <p>In the resulting table, we see the mean of the five folds of each of the metrics that we defined earlier. The accuracy is the proportion of predictions that are correct. You may think this is all we would care about, but that is not the case. The third and fourth row contain the metrics that tell you why.</p>
 <p>Sens stands for sensitivity, which is the proportion of true YES cases (graduations) we correctly labeled as YES. We got almost all of them. However, the spec stands for specificity, which is the proportion of true NO cases (drop outs) we correctly predicted. Here we got about 10% correct, which is a very low number indeed. A so called confusion matrix gives a picture of what this means in absolute terms.</p>
 <pre class="r"><code>fit_tree %&gt;%  collect_predictions() %&gt;% 
@@ -198,8 +198,8 @@ fit_tree %&gt;% collect_metrics()</code></pre>
          estimate = .pred_class)</code></pre>
 <pre><code>##           Truth
 ## Prediction  YES   NO
-##        YES 3035  838
-##        NO    62   58</code></pre>
+##        YES 3020  803
+##        NO    77   93</code></pre>
 <p>If you stare at this table for a while, you realize that out of the 900 kids that eventually dropped out of high school, we identified only a couple. We also glance that if we predict NO for a kindergarten kid we have a poor chance that we’re right.</p>
 <p>All of this is not very encouraging. Before we add bells and whistles to the tree, we have to explain the term roc_auc in the table. This term refers to the area under the curve (auc) of the so called ROC curve. We plot is below.</p>
 <pre class="r"><code>fit_tree %&gt;% 
@@ -217,8 +217,8 @@ On the y-axis is the sensitivity: the proportion of true graduations that we pre
 </div>
 <div id="decision-trees-using-resampled-data" class="section level3">
 <h3>Decision Trees using Resampled Data</h3>
-<p>One way to deal with the low specificity of our model would be to change the threshold for labeling the points as YES in a box. If this threshold is lower, then more points are labeled NO, and we probably catch more drop outs in our prediction. However, as the roc curve shows, there is trade off with sensitivity. So what we really want is improve the quality of the prediction and get a better roc_auc score.
-We do so by writing a so called tidymodels ‘recipe’ for handling the data before it is shoved into a model. The recipe start with setting up the formula. We then impute modes and medians for missing data, because it is fast. If we had more time, we would impute using techniques such as bagged trees or k nearest neighbors. We moreover use the smote algorithm to upsample kids who dropped out of high school with the help of nearest neighbors. Such kids are quite rare in the initial data set so that it is said that this data set is “imbalanced”. Also, identifying drop outs is what we are really interested in, so it makes sense to give the model more cases to train on. We also do some steps that prove useful for more advanced models and for prediction on the test data set.</p>
+<p>One way to deal with the low specificity of our model would be to change the threshold for labeling the points as YES in a box. If this threshold is lower, then more points are labeled NO, and we probably catch more drop outs in our prediction. However, as the roc curve shows, there is trade off with sensitivity. So what we really want is improve the quality of the prediction and get a better roc_auc score.</p>
+<p>We do so by writing a so called tidymodels ‘recipe’ for handling the data before it is shoved into a model. The recipe start with setting up the formula. We then impute modes and medians for missing data, because it is fast. If we had more time, we would impute using techniques such as bagged trees or k nearest neighbors. We moreover use the smote algorithm to upsample kids who dropped out of high school with the help of nearest neighbors. Such kids are quite rare in the initial data set so that it is said that this data set is “imbalanced”. Also, identifying drop outs is what we are really interested in, so it makes sense to give the model more cases to train on. We also do some steps that prove useful for more advanced models and for prediction on the test data set.</p>
 <pre class="r"><code># prep the data with a recipe
 star_rec &lt;- recipe(hsgrdcol ~ ., data = star_train) %&gt;% 
   step_impute_mode(all_nominal_predictors()) %&gt;%  
@@ -242,18 +242,18 @@ fit_tree_rec %&gt;% collect_metrics()</code></pre>
 <pre><code>## # A tibble: 4 x 6
 ##   .metric  .estimator  mean     n std_err .config             
 ##   &lt;chr&gt;    &lt;chr&gt;      &lt;dbl&gt; &lt;int&gt;   &lt;dbl&gt; &lt;chr&gt;               
-## 1 accuracy binary     0.695     5 0.00551 Preprocessor1_Model1
-## 2 roc_auc  binary     0.663     5 0.00502 Preprocessor1_Model1
-## 3 sens     binary     0.750     5 0.00526 Preprocessor1_Model1
-## 4 spec     binary     0.507     5 0.0224  Preprocessor1_Model1</code></pre>
+## 1 accuracy binary     0.710     5 0.0101  Preprocessor1_Model1
+## 2 roc_auc  binary     0.650     5 0.00618 Preprocessor1_Model1
+## 3 sens     binary     0.767     5 0.0101  Preprocessor1_Model1
+## 4 spec     binary     0.515     5 0.0170  Preprocessor1_Model1</code></pre>
 <p>The roc_auc has increased by quite a bit, while the specificity has risen quite spectacularly. This model would identify about half of the drop outs. Because the sensitivity is lower and most kids graduate, we also have a lot more false negatives. Let’s look at the absolute numbers again.</p>
 <pre class="r"><code>fit_tree_rec %&gt;%  collect_predictions() %&gt;% 
   conf_mat(truth = hsgrdcol,
          estimate = .pred_class)</code></pre>
 <pre><code>##           Truth
 ## Prediction  YES   NO
-##        YES 2323  442
-##        NO   774  454</code></pre>
+##        YES 2374  435
+##        NO   723  461</code></pre>
 <p>This time about 2/3 of our predictions of drop outs are wrong. That is still a lot.</p>
 <p>Let’s also check how well this decision model does on the test data, that is has not seen before.</p>
 <pre class="r"><code>tree_wfl &lt;- workflow() %&gt;% 
@@ -268,10 +268,10 @@ final_res_tree %&gt;% collect_metrics()</code></pre>
 <pre><code>## # A tibble: 4 x 4
 ##   .metric  .estimator .estimate .config             
 ##   &lt;chr&gt;    &lt;chr&gt;          &lt;dbl&gt; &lt;chr&gt;               
-## 1 accuracy binary         0.710 Preprocessor1_Model1
-## 2 sens     binary         0.748 Preprocessor1_Model1
-## 3 spec     binary         0.576 Preprocessor1_Model1
-## 4 roc_auc  binary         0.679 Preprocessor1_Model1</code></pre>
+## 1 accuracy binary         0.702 Preprocessor1_Model1
+## 2 sens     binary         0.799 Preprocessor1_Model1
+## 3 spec     binary         0.366 Preprocessor1_Model1
+## 4 roc_auc  binary         0.618 Preprocessor1_Model1</code></pre>
 <p>We observe that the numbers are very similar, so we haven’t overfit.</p>
 </div>
 <div id="the-logistic-model" class="section level3">
@@ -294,10 +294,10 @@ collect_metrics(logist_f)</code></pre>
 <pre><code>## # A tibble: 4 x 6
 ##   .metric  .estimator  mean     n std_err .config             
 ##   &lt;chr&gt;    &lt;chr&gt;      &lt;dbl&gt; &lt;int&gt;   &lt;dbl&gt; &lt;chr&gt;               
-## 1 accuracy binary     0.661     5 0.00780 Preprocessor1_Model1
-## 2 roc_auc  binary     0.715     5 0.00649 Preprocessor1_Model1
-## 3 sens     binary     0.664     5 0.0119  Preprocessor1_Model1
-## 4 spec     binary     0.648     5 0.0122  Preprocessor1_Model1</code></pre>
+## 1 accuracy binary     0.667     5 0.00546 Preprocessor1_Model1
+## 2 roc_auc  binary     0.720     5 0.00858 Preprocessor1_Model1
+## 3 sens     binary     0.669     5 0.00647 Preprocessor1_Model1
+## 4 spec     binary     0.658     5 0.0119  Preprocessor1_Model1</code></pre>
 <p>We note that accuracy is lower than in the decision trees, but that the roc_auc and relatedly the specificity is higher. We plot the roc curve, this time for each of the five folds, to see if they make a difference.</p>
 <pre class="r"><code>logist_f %&gt;% 
   collect_predictions() %&gt;% 
@@ -311,8 +311,8 @@ The folds matter quite a bit, so averaging out over them may reduce overfitting.
   conf_mat(hsgrdcol, .pred_class) </code></pre>
 <pre><code>##           Truth
 ## Prediction  YES   NO
-##        YES 2057  315
-##        NO  1040  581</code></pre>
+##        YES 2072  306
+##        NO  1025  590</code></pre>
 <p>We have labeled yet more drop outs correctly, but still about 2/3 of our NO labels are actually a YES (these are the false negatives). This model doesn’t look so bad. It is to be seen of decision trees can beat it.</p>
 <p>To get a rough idea of which predictors make a difference, we check out the results of the logistic model. This idea is rough, because we did not take multicollinearity into account.</p>
 <pre class="r"><code>log_fit &lt;- star_wkflw %&gt;% add_model(star_logist) %&gt;% 
@@ -320,26 +320,28 @@ The folds matter quite a bit, so averaging out over them may reduce overfitting.
 
 tidy(log_fit, exponentiate=T) %&gt;% filter(p.value &lt;0.05) %&gt;% 
   arrange(desc(estimate))</code></pre>
-<pre><code>## # A tibble: 17 x 5
-##    term                             estimate std.error statistic  p.value
-##    &lt;chr&gt;                               &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;    &lt;dbl&gt;
-##  1 gksurban_RURAL                      2.48    0.261        3.47 5.23e- 4
-##  2 race_BLACK                          1.91    0.0734       8.81 1.30e-18
-##  3 gksurban_URBAN                      1.86    0.258        2.41 1.59e- 2
-##  4 gkabsent                            1.02    0.00455      5.27 1.40e- 7
-##  5 GKWHITE                             0.996   0.00163     -2.29 2.19e- 2
-##  6 gktmathss                           0.996   0.00144     -3.05 2.27e- 3
-##  7 gktlistss                           0.991   0.00186     -4.73 2.20e- 6
-##  8 GKBUSED                             0.991   0.00216     -4.22 2.40e- 5
-##  9 gktrace_BLACK                       0.701   0.137       -2.61 9.18e- 3
-## 10 birthmonth_JUNE                     0.630   0.150       -3.08 2.05e- 3
-## 11 birthmonth_SEPTEMBER                0.594   0.140       -3.73 1.90e- 4
-## 12 birthmonth_NOVEMBER                 0.573   0.154       -3.61 3.00e- 4
-## 13 gkclasstype_REGULAR...AIDE.CLASS    0.561   0.194       -2.99 2.80e- 3
-## 14 gender_FEMALE                       0.517   0.0592     -11.1  7.49e-29
-## 15 birthmonth_DECEMBER                 0.495   0.159       -4.42 9.80e- 6
-## 16 gkfreelunch_NON.FREE.LUNCH          0.425   0.0913      -9.38 6.87e-21
-## 17 birthyear                           0.376   0.0701     -14.0  2.51e-44</code></pre>
+<pre><code>## # A tibble: 19 x 5
+##    term                       estimate std.error statistic  p.value
+##    &lt;chr&gt;                         &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;    &lt;dbl&gt;
+##  1 race_BLACK                    1.85    0.0738       8.34 7.51e-17
+##  2 gksurban_RURAL                1.80    0.242        2.44 1.47e- 2
+##  3 gkclasstype_REGULAR.CLASS     1.53    0.177        2.40 1.62e- 2
+##  4 gkmotivraw                    1.10    0.0297       3.09 2.03e- 3
+##  5 gkabsent                      1.03    0.00468      5.44 5.41e- 8
+##  6 gktmathss                     0.995   0.00145     -3.34 8.27e- 4
+##  7 gktlistss                     0.994   0.00186     -3.31 9.46e- 4
+##  8 gkwordskillss                 0.992   0.00287     -2.69 7.22e- 3
+##  9 GKBUSED                       0.991   0.00204     -4.67 2.97e- 6
+## 10 gkselfconcraw                 0.961   0.0146      -2.72 6.46e- 3
+## 11 birthmonth_JUNE               0.745   0.148       -1.98 4.74e- 2
+## 12 gktrace_BLACK                 0.708   0.137       -2.52 1.18e- 2
+## 13 gkspecin_NO                   0.628   0.209       -2.22 2.62e- 2
+## 14 gender_FEMALE                 0.595   0.0595      -8.71 2.94e-18
+## 15 birthmonth_SEPTEMBER          0.577   0.140       -3.94 8.24e- 5
+## 16 birthmonth_NOVEMBER           0.469   0.153       -4.96 7.22e- 7
+## 17 birthmonth_DECEMBER           0.366   0.158       -6.36 2.06e-10
+## 18 gkfreelunch_NON.FREE.LUNCH    0.358   0.0921     -11.1  7.96e-29
+## 19 birthyear                     0.331   0.0706     -15.7  3.17e-55</code></pre>
 <p>Not being in special education seems to greatly improve your chances of graduating, as does being in a rural community and being black. The benefit of the logistic model is that we know how to interpret it. That will turn out to be a little harder for our decision trees.</p>
 <p>Let’s see how the logistic model does on the test data set it has not seen before.</p>
 <pre class="r"><code>logist_wfl &lt;- star_wkflw %&gt;% add_model(star_logist)
@@ -352,10 +354,10 @@ final_res_log %&gt;% collect_metrics()</code></pre>
 <pre><code>## # A tibble: 4 x 4
 ##   .metric  .estimator .estimate .config             
 ##   &lt;chr&gt;    &lt;chr&gt;          &lt;dbl&gt; &lt;chr&gt;               
-## 1 accuracy binary         0.661 Preprocessor1_Model1
-## 2 sens     binary         0.674 Preprocessor1_Model1
-## 3 spec     binary         0.616 Preprocessor1_Model1
-## 4 roc_auc  binary         0.702 Preprocessor1_Model1</code></pre>
+## 1 accuracy binary         0.659 Preprocessor1_Model1
+## 2 sens     binary         0.672 Preprocessor1_Model1
+## 3 spec     binary         0.612 Preprocessor1_Model1
+## 4 roc_auc  binary         0.700 Preprocessor1_Model1</code></pre>
 <p>The results are very similar to those on the training data, which is as expected. The logistic model draws only one hypersurface through the space of the predictors and the outcome and so is unlikely to overfit.</p>
 <p>The logistic model performs strong against basic decision trees. It remains to be seen if fancier trees can beat it, which is discussed in part 2.</p>
 </div>
