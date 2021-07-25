@@ -1,0 +1,218 @@
+---
+title: 'Causal Inference 1: Fixed Effects and a Modest Specification Curve'
+author: Edi Terlaak
+date: '2021-07-25'
+slug: causal-inference-1-fixed-effects-and-a-modest-specification-curve
+categories: []
+tags: []
+subtitle: ''
+summary: ''
+authors: []
+lastmod: '2021-07-25T10:59:03+02:00'
+featured: no
+image:
+  caption: ''
+  focal_point: ''
+  preview_only: no
+projects: []
+---
+
+Over the past few decades, economists have been the main drivers of causal analysis in social science. The most influential text has probably been Angrist and Pischke's [Mostly Harmless Econometrics](https://www.researchgate.net/publication/51992844_Mostly_Harmless_Econometrics_An_Empiricist's_Companion). Of course, if we want to identify a cause, we ideally would want to do experiments. But these are often too expensive or unethical. Angrist and Pischke therefore present three methods that can to differing extents approximate experiments using observational data.  
+
+1. Difference-in-Differences
+2. Instrumental Variables
+3. Regression Discontinuity
+
+In the next couple of blog posts, I will explore some of these methods, as well as interesting recent extensions of the difference-in-differences design, which go under the heading of synthetic control. Note also that the above techniques can be used together with different types of matching. We will touch on these as well. Finally, a topic that has recently garnered a lot of attention is the freedom researchers have to influence the outcomes of their studies by the decisions they make in the analysis. This topic is known under several names, such as multiverse analysis, researcher degrees of freedom or specification curve analysis. It's all the same thing. We will make a very modest start with exploring this area of analysis in this post.
+
+Before I get to the more involved designs in later posts, I will in this post discuss basic panel data and how it helps to discards some confounders (but not others). This type of analysis is what economists call fixed effects. More on the terminology later. The [data set](https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/0IFFYZ) I work with here was pieced together by Eric Neumayer in order to investigate the effect of government polices on homicides. 
+
+The author identified several grand theories about crime, such as modernization or economic development, and selected two or three variables that he associated with each one of them. The aim was to figure out the support these theories receive from his data set. This is an ambitious project that I will not discuss here. I will focus only on his claim that policies that pacify the state lower homicide rates. The two variables associated with this theory are the death penalty and human rights violations per country. Before we discuss the strategy for identifying the causal impact of these policies we first turn to the data.
+
+### Exploring the data
+The first thing to note is that there are a lot of missing data. Over 20% in fact.
+
+```{r message=F, warning=F}
+library(haven)
+library(tidyverse)
+library(estimatr)
+library(plm)
+library(naniar)
+library(specr)
+
+setwd("C:/R/edu/Policy and crime fix eff")
+
+crime <- read_dta("JPR homicide.dta") %>% 
+  mutate(name = as_factor(name))
+
+miss_var_summary(crime)
+```
+No efforts will be made to impute data here, as the focus of this project is on the causal identification strategy. So let's get to know the data straight away by plotting them.
+
+```{r warnings=F, message=F}
+# quickly plot the vars
+crime_long <- crime %>% 
+  select(-c(starts_with("_Iperiod"), year, country, period)) %>% 
+  pivot_longer(where(is.numeric), names_to = "preds", values_to = "value")
+
+ggplot(crime_long, aes(y=value)) +
+  geom_histogram() +
+  facet_wrap(~ preds, scales= "free") +
+  coord_flip() +
+  theme_minimal()
+```
+From the variable names, it requires little imagination to come up with the alternative explanations that are tested here (such as economic prosperity or inequality), and that will serve as controls in our analysis. The main explanatory variable in the analysis is the homicide rate, for which there are two variables: `homiciderate` and `homrate`. From the shape of the histograms we learn that they seem to be similar but are not the same. From the article we learn that the numbers come from different sources.
+
+Let's plot `homiciderate` per country to get a feel for where countries are at. 
+
+```{r message=F, warning=F}
+crime %>%
+  drop_na() %>% 
+  ggplot(aes(homiciderate, fill = reorder(factor(name),homiciderate))) +
+  geom_boxplot(alpha=0.4) +
+  coord_flip() +
+  xlim(0,30) +
+  theme(axis.ticks.x = element_blank(),
+        axis.text.x = element_blank(),
+        legend.position = "bottom",
+        legend.title = element_blank()) +
+  ggtitle("Homicide rate per country in the period 1980 - 1995")
+
+```
+The most peaceful country in the bottom left of the graph is the inevitable Japan, followed by a bunch of Western European countries, while the most violent countries are Russia, some of its Western neighbours and South American countries. This is what we expected. The rank ordering of countries by `homrate` is the same (not shown here). 
+
+We move on to the independent variables. The first of which is the death penalty. 
+
+```{r message=F, warning=F}
+crime %>% 
+  group_by(period, deathpen) %>% 
+  summarize(mean = mean(homiciderate, na.rm=T)) %>% 
+  drop_na() %>% 
+  ggplot(aes(period, mean, color=factor(deathpen))) +
+  geom_line(show.legend = T, size=1) +
+  labs(color="death penalty") +
+  ylab("mean homiciderate") +
+  scale_color_manual(values = c("0" = "turquoise", "1" = "violetred1")) +
+  ggtitle("Homicide rate between countries with and without death penalty")
+
+```
+We see that in both groups of countries the mean of the homicide rate is increasing during the 1980s, but that countries without the death penalty experience a steep drop after 1990.
+
+The plot below suggests the increase in homicides is not driven by a dramatic increase (or decrease) in the number of countries with the death penalty. In other words, it's doesn't seem to be the case that a bunch of peaceful countries abolish the death penalty around 1990 and so drive down the average homicide rate 'from the outside'.
+
+```{r message=F, warning=F}
+crime %>% 
+  group_by(period, deathpen) %>% 
+  summarize(number = n()) %>% 
+  drop_na() %>% 
+  ggplot(aes(period, number, color=factor(deathpen))) +
+  geom_line(show.legend = T, size=1) +
+  labs(color="death penalty") +
+  ylab("number of countries") +
+  scale_color_manual(values = c("0" = "turquoise", "1" = "violetred1")) +
+  ggtitle("Number of countries with or without death penalty")
+```
+There are a lot of red flags when making the claim that abolishing the death penalty is the cause of fewer homicides (rather than abolishing the death penalty being a reaction to a lower homicide rate). The author of course is aware of this, but points to other studies that supposedly find evidence for thinking that the causal arrow points in the direction of the theory that says that a more pacified state causes less violence (supposedly because some of the violence in a society is a reaction to state brutality). I am personally rather skeptical about this whole line of reasoning, but I will refrain from further discussion on this issue, because it's not the purpose of this post.
+
+The other variable is human rights violations, which indeed have a positive correlation with homicide.
+
+```{r message=F, warning=F}
+crime %>% 
+  ggplot(aes(humanrightsviol, homiciderate)) +
+  geom_jitter(size=3, alpha=0.1) +
+  geom_smooth(method="lm", color="violetred1", size=1) +
+  ggtitle("Relation between homicide rate and human right violations")
+
+```
+
+### Fixed Effects
+Before we fit a fixed effects regression model, we fit a pooled regression model for comparison. A pooled regression model ignores the groups that move through time and perceives them rather as one large pool.  
+
+```{r message=F, warning=F}
+
+crime_panel <- pdata.frame(crime, index=c("country", "year"))
+
+formula <- as.formula("homiciderate ~ deathpen + femlabourpart + freedom + econgrowth + householdsize + lngdp + male1564 + humanrightsviol + urban + freedomsq + socialwelfareexp + popdensity + polity + politysq + giniwider")
+
+# First a pooled model
+crime_pool_mod <- plm(formula, 
+                    data = crime_panel,
+                    index = c("country", "year"), 
+                    model = "pooling")
+summary(crime_pool_mod)
+
+```
+Based on the pooled model there is some evidence for saying that the death penalty is associated with homicides, while there is strong evidence in the case of human rights violations. Even if we accept the pooled model, there is no evidence for a cuasal link though, because there can be confounders. This is where fixed effects models come in.
+
+Confusingly, the term fixed effects appears in two context. The first is that of multilevel modeling, where a fixed effect refers to a coefficient on a variable that is not on a higher level (which is called a random effect). More precisely, random effects are modeled (that is, a prior probability distribution is set up for them), whereas fixed effects are not. In an earlier post I mentioned that Gelman and Hill argued for this reason that the terms fixed and random effects are unfortunate and should be replaced with "unmodeled" and "modeled". 
+
+The second context is that of causal analysis on panel data. This is what we are dealing with here. The problem that a fixed effects analysis tries to solve is that of confounders. It succeeds in doing so for confounders that do not change over time. That is certainly not all of them, but every bit of progress is to be cherished, given the importance of causal questions. 
+
+The main idea is to look at change over time in the dependent variable. If there are confounders that do not change over time then they cannot explain the variation in the dependent variable over time. We can say the same thing using algebra. 
+
+Below, we start with a regression model for dependent variable Y that depends on variable X, which changes over time. The $u_i$ are unobserved confounders that do not change over time. In the second line, we calculate the average over the time period that we care about on both sides. Next, we subtract these means from both sides, so that the $u_i$ are dropped because they are unaffected by the averaging over time. 
+
+$$\begin{align}
+   Y_{it}   & =\beta X_{it} + u_i + \varepsilon_{it}                                                             
+   \\
+   \overline{Y}_i            & =\beta \overline{X}_i + u_i + \overline{\varepsilon}_{i}                                           
+   \\
+   (Y_{it} - \overline{Y}_i) & =(\beta X_{it} - \beta\overline{X}) + (u_i - u_i) + (\varepsilon_{it} - \overline{\varepsilon}_i) 
+   \\
+   \ddot{Y}_{it}             & =\beta\ddot{X}_{it}+\ddot{\varepsilon}_{it}                                                        
+\end{align}$$
+
+The analysis is called fixed effects because subtracting the mean is the same thing as estimating fixed effects for the units - say, countries - over time. This is unintuitive, but check out the derivation [here](https://mixtape.scunning.com/panel-data.html#fixed-effects-within-estimator). We run the model with the `plm` package.
+
+```{r message=F, warning=F}
+# Fixed effect model
+crime_fe_mod <- plm(formula, 
+                    data = crime_panel,
+                    index = c("country", "year"), 
+                    model = "within")
+library(lmtest)
+coeftest(crime_fe_mod, vcov. = vcovHC, type = "HC1")
+
+```
+Notice that the intercept that was in the pooled regression is gone: like the unobserved fixed effects, it was canceled by subtracting the average on both sides. We notice furthermore that the estimated effects are lower across the board, so that there seem to have been fixed confounders that were eliminated. This is progress. The standard errors are robust by the way, which we discussed in a previous post, so they are a litter bigger than for the pooled regression.
+
+Although we have ruled out confounders that are stable over time, we did not rule out confounders that change over time. So apart even from the issue of reverse causality, we are not confident that there is a causal effect of the death penality and human rights violations on homicide rates. To make more progress, we need different identification strategies that we turn to in future posts. For now, we cast yet more doubt on the results above.  
+
+## A Modest Specification Curve
+In the past two decades, a movement under the header of open science has raised awareness about the amount of subjective decisions that are involved in data analysis. Recently, this point was underlined when 29 teams of researchers were given the same data set and asked to figure out whether football players of color were more likely to get a red card for a similar offense. [Results](https://journals.sagepub.com/doi/full/10.1177/2515245917747646) differed remarkably, which shows that esteemed research teams make different decisions in the same situation. 
+
+Simonsohn and colleagues offer the specification curve as a [solution](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2694998) to this problem. In it, the researcher lays out effects for all the paths (in what Gelman calls the garden of forking paths) that he or she could have taken. Here, I will make modest steps in this direction with the help of the `specr` package. In our case, we have two dependent variables (`homrate` and `homiciderate`), we used two models, as well as two potential causes, while we could have chosen several control variables. The advantage of the `specr` package is that we can easily build a specification curve out of these decisions.
+
+```{r message=F, warning=F}
+plm_within <- function(formula, data) {
+  coeftest(plm(formula, 
+      data = crime_panel,
+      index = c("country", "year"), 
+      model = "within"), 
+            vcov. = vcovHC, 
+            type = "HC1")
+}
+
+plm_pool <- function(formula, data) {
+  plm(formula, 
+      data = crime_panel,
+      index = c("country", "year"), 
+      model = "pooling")
+}
+
+# Run specification curve analysis
+results <- run_specs(df = crime_panel, 
+                     y = c("homrate", "homiciderate"), 
+                     x = c("deathpen", "humanrightsviol"),     
+                     model = c("plm_within", "plm_pool"),       
+                     controls = c("femlabourpart", "freedom", "econgrowth", "householdsize", "lngdp", "male1564", 
+                                  "humanrightsviol", "urban", "freedomsq", "socialwelfareexp", "popdensity",
+                                  "polity", "politysq", "giniwider"))
+
+plot_specs(results)
+```
+It takes a while to get used to these types of graphs, but what we see is coefficient sizes ordered from small to large. Below them are the options from which the paths are assembled. We see on the bottom of the graph that well over 100 paths are calculated. We also see that 'significant' effects (in blue) are mainly seen for `humanrightsviolation` for the pooled model. The idea of the specification curve is that this would lead the researched to highlight the decisions that had the greatest impact on the outcome and lay out the reasons for (and against) making that decision. In this case the pooled model is certainly not the best model.
+
+There are a number of issues with the above version of a specification curve. First, the so called kitchen sink approach of including all predictors in the specification curve that we used is potentially misleading, because we could be including what Judea Pearl calls colliders into the analysis. By adjusting for a collider, we actually open a path through which information flows instead of closing it. This sounds abstract, so let's attempt to clarify with an example. Suppose we are interested in the relation between height and skill at basketball and adjust  for playing in the NBA. This is a bad idea, because arguably shorter players that still make it to the NBA must be more skilled, in order to compensate for their height. It may well be that we found a relation between height and skill in the model in which we adjust for playing in the NBA, while there is none in the population. Ultimately, scientific progress is made with the help of scientific models of the process we try to understand. We must use these models when we interpret a specification curve.
+
+Second, we cannot currently instruct `specr` to specify all combinations of control variables. This would lead to a massive number of options to calculate, which the makers may be holding off on until they implemented support for parallel processing, which they are working on. We also cannot yet include decisions such whether to impute or row delete missing values or discard outliers. This can be done with Joachim Gassen's `rdfanalysis`, which is introduced [here](https://joachim-gassen.github.io/2019/03/explore-your-researcher-degrees-of-freedom/). Implementing the steps in his package is a lot more work though. Alternatively, one can code up one's own table of coefficient estimates with a bunch of for loops, which may or may not be more work. Having an exhaustive package with agreed upon options would be preferable though, because the problem of researcher degrees of freedom would otherwise enter again at the level of specification curve construction. 
