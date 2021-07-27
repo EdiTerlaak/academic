@@ -47,29 +47,35 @@ leed <- read_dta("C:/R/edu/LEED schools/LEED.dta") %>%
          Post = LEED,
          Treat_time = LEED*Treatment)
 
-panelView(ln_SPI ~ Treat_time + LEED + Treatment + ln_Female + ln_PerPupilExpenditureClassroom + 
-          ln_StudentsperTeacherFTEEnroll, 
+plot1 <- panelView(ln_SPI ~ Treat_time + LEED + Treatment + ln_Female + ln_PerPupilExpenditureClassroom +           ln_StudentsperTeacherFTEEnroll, 
           data = leed, 
           index = c("school","Year"), 
           xlab = "Year", ylab = "School",
           pre.post=T) 
+cat(dev.off())
 
+plot1 +
+  scale_y_continuous(labels=NULL)
 ```
 We observe that this is indeed the case. All treatments are assigned in 2012. The picture also confirms that there are about as many control as treatment units. 
 
 Another useful feature of the package is that we get a feel for the development of the dependent variable over time for control and treatment groups.
 
 ```{r message=F, warning=F}
-panelView(ln_SPI ~ Treat_time + LEED + Treatment + ln_Female + ln_PerPupilExpenditureClassroom + 
+plot2 <- panelView(ln_SPI ~ Treat_time + LEED + Treatment + ln_Female + ln_PerPupilExpenditureClassroom + 
           ln_StudentsperTeacherFTEEnroll, 
           data = leed, 
-          index = c("school","Year"),
+          index = c("School","Year"),
           type = "outcome", 
           main = "log of SPI and LEED", 
           ylim = c(3.75,4.75),
           xlab = "Year", ylab = "ln(SPI)",
           legend.labs = c("Control Schools","Treated Schools (before LEED)", "Treated Schools (after LEED)"),
           theme.bw = F) 
+cat(dev.off())
+
+plot2 +
+  scale_x_continuous(breaks = 2006:2015)
 
 ```
 The variable `LEED` refers to the time periods before 2012 (0) and after (1), while `Treatment` refers to whether or not a school is in the group that would get a new building in 2012. The variable `ln_SPI` refers to the log of the mean student scores in a school. The authors decided to take the log of the scores, probably to improve the fit of the linear regression; we leave it that way here because it enhances the visibility of the plot. The plot is still a mess, because there is no clear improvement in scores for treated schools compared to the control group. 
