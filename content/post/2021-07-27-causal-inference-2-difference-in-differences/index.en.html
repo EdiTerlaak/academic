@@ -51,11 +51,11 @@ plot1 &lt;- panelView(ln_SPI ~ Treat_time + LEED + Treatment + ln_Female + ln_Pe
           index = c(&quot;school&quot;,&quot;Year&quot;), 
           xlab = &quot;Year&quot;, ylab = &quot;School&quot;,
           pre.post=T) </code></pre>
-<p><img src="{{< blogdown/postref >}}index.en_files/figure-html/unnamed-chunk-1-1.png" width="672" /></p>
-<pre class="r"><code>cat(dev.off())</code></pre>
-<pre><code>## 1</code></pre>
 <pre class="r"><code>plot1 +
   scale_y_continuous(labels=NULL)</code></pre>
+<pre><code>## Scale for &#39;y&#39; is already present. Adding another scale for &#39;y&#39;, which will
+## replace the existing scale.</code></pre>
+<p><img src="{{< blogdown/postref >}}index.en_files/figure-html/unnamed-chunk-2-1.png" width="672" /></p>
 <p>We observe that this is indeed the case. All treatments are assigned in 2012. The picture also confirms that there are about as many control as treatment units.</p>
 <p>Another useful feature of the package is that we get a feel for the development of the dependent variable over time for control and treatment groups.</p>
 <pre class="r"><code>plot2 &lt;- panelView(ln_SPI ~ Treat_time + LEED + Treatment + ln_Female + ln_PerPupilExpenditureClassroom + 
@@ -68,11 +68,9 @@ plot1 &lt;- panelView(ln_SPI ~ Treat_time + LEED + Treatment + ln_Female + ln_Pe
           xlab = &quot;Year&quot;, ylab = &quot;ln(SPI)&quot;,
           legend.labs = c(&quot;Control Schools&quot;,&quot;Treated Schools (before LEED)&quot;, &quot;Treated Schools (after LEED)&quot;),
           theme.bw = F) </code></pre>
-<p><img src="{{< blogdown/postref >}}index.en_files/figure-html/unnamed-chunk-2-1.png" width="672" /></p>
-<pre class="r"><code>cat(dev.off())</code></pre>
-<pre><code>## 1</code></pre>
 <pre class="r"><code>plot2 +
   scale_x_continuous(breaks = 2006:2015)</code></pre>
+<p><img src="{{< blogdown/postref >}}index.en_files/figure-html/unnamed-chunk-4-1.png" width="672" /></p>
 <p>The variable <code>LEED</code> refers to the time periods before 2012 (0) and after (1), while <code>Treatment</code> refers to whether or not a school is in the group that would get a new building in 2012. The variable <code>ln_SPI</code> refers to the log of the mean student scores in a school. The authors decided to take the log of the scores, probably to improve the fit of the linear regression; we leave it that way here because it enhances the visibility of the plot. The plot is still a mess, because there is no clear improvement in scores for treated schools compared to the control group.</p>
 <p>The natural next step is to take the average of each group before treatment and after treatment and to connect the averages of each group with a line segment. That way we get a much clearer picture. We do so by hand.</p>
 <pre class="r"><code>diff &lt;- leed %&gt;% group_by(Post, Treatment) %&gt;% 
@@ -107,7 +105,7 @@ ggplot(diff, aes(Post, mean_SPI, color=factor(Treatment))) +
   theme(axis.ticks.x = element_blank(),
         axis.text.x = element_blank()) +
   scale_color_npg() </code></pre>
-<p><img src="{{< blogdown/postref >}}index.en_files/figure-html/unnamed-chunk-3-1.png" width="672" /></p>
+<p><img src="{{< blogdown/postref >}}index.en_files/figure-html/unnamed-chunk-5-1.png" width="672" /></p>
 <p>First of all, the mean before 2012 is higher for both groups than in the period after 2012. The best the intervention can hope for then is to have a slower decline in test scores.</p>
 <p>In any case, the picture above shows what difference in differences is all about. The red line shows the change in mean before and after 2012 for the control group, while the blue line shows the decline for the intervention group. The dashed line is the crucial bit. It shows what <em>would have happened</em> in the intervention group if there had been no intervention - so if no new schools would have been built. This is the core of causality. You compare an outcome to what would have happened absent the presumed cause. If we compare the actual outcome with the counterfactual dashed line, we notice that there is a tiny improvement.</p>
 <p>The crucial assumption of the difference in differences approach is that the treatment group would have moved along a similar trajectory as the control group. That is, we assume the dashed line (the counterfactual) is parallel to the red line. But that assumption is something we should make a case for. The plausibility of the causal claim rests on the strength of this case.</p>
@@ -121,7 +119,7 @@ leed %&gt;% ggplot(aes(Year, SPI, color=factor(Treatment))) +
   scale_x_continuous(breaks = 2006:2015) +
   labs(color = &quot;Treatment&quot;) +
   scale_color_npg() </code></pre>
-<p><img src="{{< blogdown/postref >}}index.en_files/figure-html/unnamed-chunk-4-1.png" width="672" />
+<p><img src="{{< blogdown/postref >}}index.en_files/figure-html/unnamed-chunk-6-1.png" width="672" />
 Visually, the case that the control and intervention group follow a similar trajectory before the intervention is strong with respect to the outcome variable. It seems reasonable then to assume parallel trends. However, we also see that they follow a very similar trajectory after the intervention!</p>
 <p>So far, we drew pictures of the data. In doing so we didn’t include covariates that may influence the trajectory in both groups, and we didn’t calculate standard errors. However, given how small the possible gain in SPI is compared to the massive drop over the entire period, combined with the large variation and the modest n, we can be fairly confident that we will be unable to even tell if the SPI will decline or increase because of the intervention in general.</p>
 </div>

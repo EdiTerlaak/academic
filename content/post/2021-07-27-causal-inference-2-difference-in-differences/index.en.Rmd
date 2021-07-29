@@ -31,7 +31,7 @@ The first school was opened under the LEED program in 2009. However, the authors
 ### The Data
 In order to get a quick overview of panel data, we use the handy `panelView` package. This tells us immediately if the treatment was given at the same point in time.
 
-```{r message=F, warning=F}
+```{r message=F, warning=F, fig.show='hide'}
 library(tidyverse)
 library(haven)
 library(estimatr)
@@ -52,16 +52,18 @@ plot1 <- panelView(ln_SPI ~ Treat_time + LEED + Treatment + ln_Female + ln_PerPu
           index = c("school","Year"), 
           xlab = "Year", ylab = "School",
           pre.post=T) 
-cat(dev.off())
+```
 
+```{r}
 plot1 +
   scale_y_continuous(labels=NULL)
 ```
+
 We observe that this is indeed the case. All treatments are assigned in 2012. The picture also confirms that there are about as many control as treatment units. 
 
 Another useful feature of the package is that we get a feel for the development of the dependent variable over time for control and treatment groups.
 
-```{r message=F, warning=F}
+```{r message=F, warning=F, fig.show='hide'}
 plot2 <- panelView(ln_SPI ~ Treat_time + LEED + Treatment + ln_Female + ln_PerPupilExpenditureClassroom + 
           ln_StudentsperTeacherFTEEnroll, 
           data = leed, 
@@ -72,12 +74,12 @@ plot2 <- panelView(ln_SPI ~ Treat_time + LEED + Treatment + ln_Female + ln_PerPu
           xlab = "Year", ylab = "ln(SPI)",
           legend.labs = c("Control Schools","Treated Schools (before LEED)", "Treated Schools (after LEED)"),
           theme.bw = F) 
-cat(dev.off())
-
+```
+```{r}
 plot2 +
   scale_x_continuous(breaks = 2006:2015)
-
 ```
+
 The variable `LEED` refers to the time periods before 2012 (0) and after (1), while `Treatment` refers to whether or not a school is in the group that would get a new building in 2012. The variable `ln_SPI` refers to the log of the mean student scores in a school. The authors decided to take the log of the scores, probably to improve the fit of the linear regression; we leave it that way here because it enhances the visibility of the plot. The plot is still a mess, because there is no clear improvement in scores for treated schools compared to the control group. 
 
 The natural next step is to take the average of each group before treatment and after treatment and to connect the averages of each group with a line segment. That way we get a much clearer picture. We do so by hand. 
