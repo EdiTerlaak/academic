@@ -117,7 +117,7 @@ In any case, the picture above shows what difference in differences is all about
 
 The crucial assumption of the difference in differences approach is that the treatment group would have moved along a similar trajectory as the control group. That is, we assume the dashed line (the counterfactual) is parallel to the red line. But that assumption is something we should make a case for. The plausibility of the causal claim rests on the strength of this case. 
 
-Before we get to that case, we plot the student results in both groups not by just connecting the means in the two periods, but with a kernel regression. 
+Before we get to that case, we plot the student results in both groups not by just connecting the means in the two periods, but with a locally weighted regression. 
 
 ```{r message=F, warning=F}
 library("ggsci")
