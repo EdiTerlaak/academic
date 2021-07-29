@@ -76,7 +76,6 @@ plot1 &lt;- panelView(lngdpmad ~ dem + lngdpmadlag + lngdpmadlag2 + lngdpmadlag3
           index = c(&quot;Country&quot;,&quot;year&quot;), 
           xlab = &quot;Year&quot;, ylab = &quot;Country&quot;,
           pre.post = T)</code></pre>
-<p><img src="{{< blogdown/postref >}}index.en_files/figure-html/unnamed-chunk-1-1.png" width="672" /></p>
 <pre class="r"><code>plot1 + 
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))</code></pre>
 <p><img src="{{< blogdown/postref >}}index.en_files/figure-html/unnamed-chunk-2-1.png" width="672" /></p>
@@ -305,7 +304,7 @@ Bootstrapping ...
 ## 
 list of removed treated units: Tanzania</code></pre>
 <pre><code>##    user  system elapsed 
-##    0.92    0.23    8.16</code></pre>
+##    1.00    0.30    8.87</code></pre>
 <pre class="r"><code>plot(out)</code></pre>
 <p><img src="{{< blogdown/postref >}}index.en_files/figure-html/unnamed-chunk-12-1.png" width="672" />
 Given this plot, we are not sure at all that democracy on average plays a role for good in terms of boosting GDP in Sub-Saharan Africa. Given the (bootstrap based) uncertainty band, it may hamper growth as well.</p>

@@ -81,7 +81,7 @@ The intuitive strenth of the synthetic control method shines when it is applied.
 
 Let's first check which Sub-Saharan countries became democratic in what year. (South Africa is not included, because it is too different from the other countries.) We use the handy `panelView` package to visualize the answer to this question.
 
-```{r}
+```{r fig.show='hide'}
 library(tidyverse)
 library(haven)
 library(tidysynth)
